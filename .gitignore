@@ -1,0 +1,16 @@
+# Test directories
+Archives/
+Spaces/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/
