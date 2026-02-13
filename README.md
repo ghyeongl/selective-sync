@@ -16,7 +16,7 @@ selective-sync/
 │   │   ├── handlers.go   ← HTTP API (/api/sync/*)
 │   │   └── ...
 │   └── frontend/src/
-│       ├── components/sync/  ← SyncCheckbox, SyncStatusBadge, SpacesUsageBar
+│       ├── components/sync/  ← SyncCheckbox, SyncStatusBadge
 │       └── stores/sync.ts    ← Pinia 스토어
 ├── PRD.md                ← 상세 설계 문서
 └── Archives/, Spaces/    ← 로컬 테스트용 (gitignore)
@@ -46,24 +46,30 @@ selective-sync/
 
 ## 빌드
 
+바이너리 이름 규칙: `filebrowser-{os}-{arch}` (예: `filebrowser-linux-arm64`, `filebrowser-darwin-arm64`)
+
 ```bash
 cd filebrowser
 export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"
 
-# 백엔드
-go build -o filebrowser .
+# 백엔드 (현재 플랫폼)
+go build -o filebrowser-$(go env GOOS)-$(go env GOARCH) .
 
 # 프론트엔드
 cd frontend && pnpm install && pnpm run build
 ```
 
+> 같은 ARM64라도 linux와 darwin 바이너리는 호환되지 않습니다. 각 환경에서 빌드해야 합니다.
+
 ## 실행
 
 ```bash
-./filebrowser \
+./filebrowser-linux-arm64 \
   --database ./filebrowser.db \
-  --archives-path /path/to/Archives \
-  --spaces-path /path/to/Spaces
+  -a 0.0.0.0 -p 9090 \
+  --archivesPath /path/to/Archives \
+  --spacesPath /path/to/Spaces \
+  --syncLog
 ```
 
 sync.db는 filebrowser.db와 같은 디렉토리에 자동 생성됩니다.
