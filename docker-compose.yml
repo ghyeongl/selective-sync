@@ -1,0 +1,17 @@
+services:
+  selective-syncer:
+    image: ghcr.io/ghyeongl/selective-syncer:s6-arm64
+    container_name: selective-syncer
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./data/config:/config
+      - ./data/database:/database
+      - ./data/archives:/archives
+      - ./data/spaces:/spaces
+      - ./data/log:/log
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Seoul
