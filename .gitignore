@@ -1,6 +1,8 @@
 # Test directories
 Archives/
 Spaces/
+.trash/
+log/
 
 # IDE
 .vscode/
@@ -15,5 +17,6 @@ Thumbs.db
 # Claude
 .claude/
 
+*.db
 *.db-shm
 *.db-wal
