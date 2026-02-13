@@ -14,3 +14,6 @@ Thumbs.db
 
 # Claude
 .claude/
+
+*.db-shm
+*.db-wal
