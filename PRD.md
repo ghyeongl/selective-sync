@@ -133,8 +133,8 @@ S_dirty N/A (S_db=0).
 
 | # | A_disk | A_db | S_disk | S_db | sel | A_d | S_d | 의미 |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|------|
-| 23 | 1 | 1 | 1 | 0 | 0 | 0 | - | Spaces 잔존, unselected |
-| 24 | 1 | 1 | 1 | 0 | 0 | 1 | - | Spaces 잔존 + Archives 수정됨 |
+| 23 | 1 | 1 | 1 | 0 | 0 | 0 | - | Spaces 외부 유입 (S_db=0) |
+| 24 | 1 | 1 | 1 | 0 | 0 | 1 | - | Spaces 외부 유입 + A 수정 (파일: conflict) |
 | 25 | 1 | 1 | 1 | 0 | 1 | 0 | - | selected, S_db 누락 |
 | 26 | 1 | 1 | 1 | 0 | 1 | 1 | - | selected, S_db 누락 + Archives 수정됨 |
 
@@ -147,7 +147,7 @@ A_dirty, S_dirty 모두 유효.
 | 27 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | deselect 대기 |
 | 28 | 1 | 1 | 1 | 1 | 0 | 0 | 1 | deselect 대기 + Spoke 수정 |
 | 29 | 1 | 1 | 1 | 1 | 0 | 1 | 0 | deselect 대기 + Archives 수정 |
-| 30 | 1 | 1 | 1 | 1 | 0 | 1 | 1 | deselect 대기 + 양쪽 수정 (conflict) |
+| 30 | 1 | 1 | 1 | 1 | 0 | 1 | 1 | deselect 대기 + 양쪽 수정 |
 | 31 | 1 | 1 | 1 | 1 | 1 | 0 | 0 | synced (정상) |
 | 32 | 1 | 1 | 1 | 1 | 1 | 0 | 1 | Spoke 수정 |
 | 33 | 1 | 1 | 1 | 1 | 1 | 1 | 0 | Archives SSH 수정 |
@@ -533,27 +533,41 @@ A_dirty, S_dirty 모두 유효.
 
 ---
 
-### #23. Spaces 잔존, unselected
+### #23. Spaces 외부 유입 (unselected, S_db 없음)
 
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=0, sel=0, A_dirty=0
 
-**파이프라인:**
-- P0~P2: 스킵
-- P3: sel=0, S_disk=1 → MockDelete S → **S_disk=0**
+**설계 근거:** S_db=0은 이 파일이 Spaces에서 관리된 적이 없다는 의미. 그런데 S_disk=1이면 SSH/SMB 등 외부 경로로 Spaces에 유입된 것. selected=1로 전환하고 Spoke wins로 S 내용을 A에 반영.
 
----
-
-### #24. Spaces 잔존 + Archives 수정됨, unselected
-
-**Input:** A_disk=1, A_db=1, S_disk=1, S_db=0, sel=0, A_dirty=1
+**S_db=0 vs S_db=1 구분:** S_db=1이면 이전에 동기화됐다가 deselect된 것 → MockDelete(#25와 대조). S_db=0이면 한 번도 동기화된 적 없음 → 외부 유입.
 
 **파이프라인:**
 - P0~P1: 스킵
-- P2: A_dirty=1 → entries UPDATE → **A_dirty=0**
-- P3: sel=0, S_disk=1 → MockDelete S → **S_disk=0**
-- P4: 일치 → 스킵
+- P2: S_db=0 + S_disk=1 → 외부 유입 감지. entries UPDATE selected=1. A_dirty=0이므로 SafeCopy S→A (Spoke wins) → entries UPDATE(mtime, size) → **A_dirty=0**
+- P3: sel=1, S_disk=1 → 일치 → 스킵
+- P4: S_db=0 → spaces_view INSERT → **S_db=1**
 
-**Output:** → #15 (archived)
+**Output:** → #31 (synced)
+
+---
+
+### #24. Spaces 외부 유입 + Archives 수정됨 (conflict)
+
+**Input:** A_disk=1, A_db=1, S_disk=1, S_db=0, sel=0, A_dirty=1
+
+**설계 근거:** S_db=0 + S_disk=1 = 외부 유입. A_dirty=1 = SSH/SMB로 Archives도 수정됨. 양쪽 모두 사용자 의도가 담긴 변경이므로 conflict. (디렉토리는 A_dirty=false이므로 이 시나리오에 진입 불가.)
+
+**파이프라인:**
+- P0~P1: 스킵
+- P2: S_db=0 + S_disk=1 + A_dirty=1 → **conflict 감지.**
+  1. Archives/path → Archives/path_conflict-N rename
+  2. conflict entries INSERT(selected=1)
+  3. Spoke wins: SafeCopy S→A → entries UPDATE(mtime, size) → **A_dirty=0**
+  4. entries UPDATE selected=1
+- P3: sel=1, S_disk=1 → 일치 → 스킵
+- P4: S_db=0 → spaces_view INSERT → **S_db=1**
+
+**Output:** → #31 (synced). 파일의 경우 conflict copy → 다음 tick에서 #17 경로로 Spaces 전파
 
 
 ---
@@ -638,22 +652,19 @@ A_dirty, S_dirty 모두 유효.
 
 ---
 
-### #30. deselect 대기 + 양쪽 수정 (conflict)
+### #30. deselect 대기 + 양쪽 수정
 
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=1, sel=0, A_dirty=1, S_dirty=1
 
+**설계 근거:** selected=0 + S_db=1 = deselect 의도 명확. S에서 수정이 있었어도 사용자가 deselect한 이상 그 수정분은 버린다. conflict가 아니다.
+
 **파이프라인:**
 - P0~P1: 스킵
-- P2: A_dirty=1 AND S_dirty=1 → **CONFLICT**
-  1. Archives/path → Archives/path_conflict-{N} rename
-  2. entries INSERT (conflict copy, selected=1)
-  3. cp S→A (Spoke wins), entries UPDATE, spaces_view UPDATE
-  → **A_dirty=0, S_dirty=0**
+- P2: A_dirty=1 → entries UPDATE(mtime, size) → **A_dirty=0**. S_dirty는 삭제 예정이므로 무시.
 - P3: sel=0, S_disk=1 → MockDelete S → **S_disk=0**
 - P4: S_disk=0, S_db=1 → spaces_view DELETE → **S_db=0**
-- (conflict copy는 다음 tick에서 #17 → P3 cp A→S → P4 INSERT → #31)
 
-**Output:** 원본 → #15 (archived), conflict copy → #17 → #31 (Spoke에 전파)
+**Output:** → #15 (archived)
 
 
 ---
@@ -703,9 +714,9 @@ A_dirty, S_dirty 모두 유효.
 
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=1, sel=1, A_dirty=1, S_dirty=1
 
-**파이프라인:**
+**파이프라인:** (디렉토리는 A_dirty/S_dirty=false이므로 이 시나리오에 진입 불가.)
 - P0~P1: 스킵
-- P2: A_dirty=1 AND S_dirty=1 → **CONFLICT**
+- P2: A_dirty=1 AND S_dirty=1 → **CONFLICT.**
   1. Archives/path → Archives/path_conflict-{N} rename
   2. entries INSERT (conflict copy, selected=1)
   3. cp S→A (Spoke wins), entries UPDATE, spaces_view UPDATE
