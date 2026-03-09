@@ -202,14 +202,15 @@ A_dirty, S_dirty 모두 유효.
 
 **동작:**
 
-| selected | S_disk | 동작 |
-|:---:|:---:|------|
-| 1 | 0 | SafeCopy A→S. **S_db=1이면 spaces_view UPDATE(synced_mtime) → S_dirty=0** |
-| 0 | 1 | MockDelete S (→ .trash/) |
+| selected | S_disk | S_db | 동작 |
+|:---:|:---:|:---:|------|
+| 1 | 0 | 0 | 첫 동기화: SafeCopy A→S |
+| 1 | 0 | 1 | 외부 삭제 (syncthing 등): **deselect** (selected=0). re-copy하지 않음 |
+| 0 | 1 | - | MockDelete S (→ .trash/) |
 
-**통과 후 보장:** selected=1이면 S_disk=1, selected=0이면 S_disk=0
+**통과 후 보장:** selected=1 AND S_db=0이면 S_disk=1, selected=0이면 S_disk=0
 
-**보강 근거:** P3에서 cp A→S 후 spaces_view.synced_mtime을 갱신하지 않으면 다음 tick에서 S_dirty=1로 오판하여 불필요한 역방향 cp 발생 (#21, #22에서 발견).
+**S_db 분기 근거:** Syncthing이 Mac 삭제를 Spaces에 전파하면 S_disk=0이 되지만 S_db=1은 유지됨 (syncthing은 DB를 건드리지 않음). S_db=1이면 이전에 Spaces에 동기화된 적이 있으므로 "외부 삭제"로 판단하고 deselect. S_db=0이면 한 번도 Spaces에 간 적 없는 "첫 동기화"이므로 copy A→S. re-copy 시 syncthing과 무한 루프 발생 (삭제 → 복사 → syncthing 전파 → 삭제 → 복사...).
 
 ### P4. DB 정합성
 
@@ -238,6 +239,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #1. 미존재 (정상)
 
+**UI 상태:** (없음)
 **Input:** A_disk=0, A_db=0, S_disk=0, S_db=0, sel=0
 
 **파이프라인:**
@@ -250,6 +252,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #2. Archives untracked
 
+**UI 상태:** `untracked`
 **Input:** A_disk=1, A_db=0, S_disk=0, S_db=0, sel=0
 
 **파이프라인:**
@@ -264,6 +267,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #3. Spaces untracked (Spoke 생성)
 
+**UI 상태:** `untracked`
 **Input:** A_disk=0, A_db=0, S_disk=1, S_db=0, sel=0
 
 **파이프라인:**
@@ -280,6 +284,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #4. 양쪽 untracked
 
+**UI 상태:** `untracked`
 **Input:** A_disk=1, A_db=0, S_disk=1, S_db=0, sel=0
 
 **파이프라인:**
@@ -296,6 +301,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #5. Archives 유실, 복구 불가
 
+**UI 상태:** `lost`
 **Input:** A_disk=0, A_db=1, S_disk=0, S_db=0, sel=0
 
 **파이프라인:**
@@ -307,6 +313,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #6. Archives 유실, 복구 불가 (selected)
 
+**UI 상태:** `lost`
 **Input:** A_disk=0, A_db=1, S_disk=0, S_db=0, sel=1
 
 **파이프라인:** #5와 동일
@@ -318,6 +325,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #7. 양쪽 디스크 없음
 
+**UI 상태:** `lost`
 **Input:** A_disk=0, A_db=1, S_disk=0, S_db=1, sel=0
 
 **파이프라인:**
@@ -329,6 +337,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #8. 양쪽 디스크 없음 (selected)
 
+**UI 상태:** `lost`
 **Input:** A_disk=0, A_db=1, S_disk=0, S_db=1, sel=1
 
 **파이프라인:** #7과 동일
@@ -340,6 +349,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #9. Archives 유실, Spaces 생존, unselected
 
+**UI 상태:** `recovering`
 **Input:** A_disk=0, A_db=1, S_disk=1, S_db=0, sel=0
 
 **파이프라인:**
@@ -355,6 +365,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #10. Archives 유실, Spaces 생존, selected
 
+**UI 상태:** `recovering`
 **Input:** A_disk=0, A_db=1, S_disk=1, S_db=0, sel=1
 
 **파이프라인:**
@@ -369,6 +380,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #11. Archives 유실, S synced, unselected
 
+**UI 상태:** `recovering`
 **Input:** A_disk=0, A_db=1, S_disk=1, S_db=1, sel=0, S_dirty=0
 
 **파이프라인:**
@@ -384,6 +396,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #12. Archives 유실, S dirty, unselected
 
+**UI 상태:** `recovering`
 **Input:** A_disk=0, A_db=1, S_disk=1, S_db=1, sel=0, S_dirty=1
 
 **파이프라인:**
@@ -399,6 +412,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #13. Archives 유실, S synced, selected
 
+**UI 상태:** `recovering`
 **Input:** A_disk=0, A_db=1, S_disk=1, S_db=1, sel=1, S_dirty=0
 
 **파이프라인:**
@@ -412,6 +426,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #14. Archives 유실, S dirty, selected
 
+**UI 상태:** `recovering`
 **Input:** A_disk=0, A_db=1, S_disk=1, S_db=1, sel=1, S_dirty=1
 
 **파이프라인:**
@@ -426,6 +441,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #15. archived (정상)
 
+**UI 상태:** `archived`
 **Input:** A_disk=1, A_db=1, S_disk=0, S_db=0, sel=0, A_dirty=0
 
 **파이프라인:** 모든 단계 스킵 (정상)
@@ -437,6 +453,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #16. archived + Archives SSH 수정
 
+**UI 상태:** `archived`
 **Input:** A_disk=1, A_db=1, S_disk=0, S_db=0, sel=0, A_dirty=1
 
 **파이프라인:**
@@ -452,6 +469,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #17. select 대기
 
+**UI 상태:** `syncing`
 **Input:** A_disk=1, A_db=1, S_disk=0, S_db=0, sel=1, A_dirty=0
 
 **파이프라인:**
@@ -465,6 +483,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #18. select 대기 + Archives 수정됨
 
+**UI 상태:** `syncing`
 **Input:** A_disk=1, A_db=1, S_disk=0, S_db=0, sel=1, A_dirty=1
 
 **파이프라인:**
@@ -479,6 +498,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #19. S_db 잔존 (고아)
 
+**UI 상태:** `repairing`
 **Input:** A_disk=1, A_db=1, S_disk=0, S_db=1, sel=0, A_dirty=0
 
 **파이프라인:**
@@ -493,6 +513,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #20. S_db 잔존 + Archives 수정됨
 
+**UI 상태:** `repairing`
 **Input:** A_disk=1, A_db=1, S_disk=0, S_db=1, sel=0, A_dirty=1
 
 **파이프라인:**
@@ -506,35 +527,42 @@ A_dirty, S_dirty 모두 유효.
 
 ---
 
-### #21. selected인데 Spaces 유실
+### #21. selected + 외부 Spaces 삭제
 
+**UI 상태:** `repairing`
 **Input:** A_disk=1, A_db=1, S_disk=0, S_db=1, sel=1, A_dirty=0
+
+**설계 근거:** S_db=1은 이전에 Spaces에 동기화된 적이 있다는 의미. 그런데 S_disk=0이면 외부에서 삭제된 것 (syncthing이 Mac 삭제를 전파). syncthing은 DB를 건드리지 않으므로 S_db로 "첫 동기화"(S_db=0)와 "외부 삭제"(S_db=1)를 구분 가능. re-copy하면 syncthing과 무한 루프 발생.
 
 **파이프라인:**
 - P0~P2: 스킵
-- P3: sel=1, S_disk=0 → SafeCopy A→S → **S_disk=1**. S_db=1 → spaces_view UPDATE(synced_mtime) → **S_dirty=0**
-- P4: 일치 → 스킵
+- P3: sel=1, S_disk=0, **S_db=1** → 외부 삭제 감지 → **deselect (sel=0)**
+- P4: S_disk=0, S_db=1 → spaces_view DELETE → **S_db=0**
 
-**Output:** → #31 (synced)
+**Output:** → #15 (archived)
 
 ---
 
-### #22. selected + Spaces 유실 + Archives 수정됨
+### #22. selected + 외부 Spaces 삭제 + Archives 수정됨
 
+**UI 상태:** `repairing`
 **Input:** A_disk=1, A_db=1, S_disk=0, S_db=1, sel=1, A_dirty=1
+
+**설계 근거:** #21과 동일. ADirty는 P2에서 선처리되므로 P3 도달 시 이미 해소.
 
 **파이프라인:**
 - P0~P1: 스킵
 - P2: A_dirty=1 → entries UPDATE. sel=1이지만 S_disk=0이므로 cp 불필요 → **A_dirty=0**
-- P3: sel=1, S_disk=0 → SafeCopy A→S (최신) → **S_disk=1**. S_db=1 → spaces_view UPDATE(synced_mtime) → **S_dirty=0**
-- P4: 일치 → 스킵
+- P3: sel=1, S_disk=0, **S_db=1** → 외부 삭제 감지 → **deselect (sel=0)**
+- P4: S_disk=0, S_db=1 → spaces_view DELETE → **S_db=0**
 
-**Output:** → #31 (synced)
+**Output:** → #15 (archived)
 
 ---
 
 ### #23. Spaces 외부 유입 (unselected, S_db 없음)
 
+**UI 상태:** `repairing`
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=0, sel=0, A_dirty=0
 
 **설계 근거:** S_db=0은 이 파일이 Spaces에서 관리된 적이 없다는 의미. 그런데 S_disk=1이면 SSH/SMB 등 외부 경로로 Spaces에 유입된 것. selected=1로 전환하고 Spoke wins로 S 내용을 A에 반영.
@@ -553,6 +581,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #24. Spaces 외부 유입 + Archives 수정됨 (conflict)
 
+**UI 상태:** `conflict`
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=0, sel=0, A_dirty=1
 
 **설계 근거:** S_db=0 + S_disk=1 = 외부 유입. A_dirty=1 = SSH/SMB로 Archives도 수정됨. 양쪽 모두 사용자 의도가 담긴 변경이므로 conflict. (디렉토리는 A_dirty=false이므로 이 시나리오에 진입 불가.)
@@ -574,6 +603,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #25. selected, S_db 누락
 
+**UI 상태:** `repairing`
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=0, sel=1, A_dirty=0
 
 **파이프라인:**
@@ -588,6 +618,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #26. selected, S_db 누락 + Archives 수정됨
 
+**UI 상태:** `repairing`
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=0, sel=1, A_dirty=1
 
 **파이프라인:**
@@ -610,6 +641,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #27. deselect 대기
 
+**UI 상태:** `removing`
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=1, sel=0, A_dirty=0, S_dirty=0
 
 **파이프라인:**
@@ -624,6 +656,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #28. deselect 대기 + Spoke 수정
 
+**UI 상태:** `removing`
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=1, sel=0, A_dirty=0, S_dirty=1
 
 **파이프라인:**
@@ -639,6 +672,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #29. deselect 대기 + Archives SSH 수정
 
+**UI 상태:** `removing`
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=1, sel=0, A_dirty=1, S_dirty=0
 
 **파이프라인:**
@@ -654,6 +688,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #30. deselect 대기 + 양쪽 수정
 
+**UI 상태:** `removing`
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=1, sel=0, A_dirty=1, S_dirty=1
 
 **설계 근거:** selected=0 + S_db=1 = deselect 의도 명확. S에서 수정이 있었어도 사용자가 deselect한 이상 그 수정분은 버린다. conflict가 아니다.
@@ -671,6 +706,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #31. synced (정상)
 
+**UI 상태:** `synced`
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=1, sel=1, A_dirty=0, S_dirty=0
 
 **파이프라인:** 모든 단계 스킵 (정상)
@@ -682,6 +718,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #32. Spoke 수정
 
+**UI 상태:** `updating`
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=1, sel=1, A_dirty=0, S_dirty=1
 
 **파이프라인:**
@@ -697,6 +734,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #33. Archives SSH 수정
 
+**UI 상태:** `updating`
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=1, sel=1, A_dirty=1, S_dirty=0
 
 **파이프라인:**
@@ -712,6 +750,7 @@ A_dirty, S_dirty 모두 유효.
 
 ### #34. 양쪽 수정 (conflict)
 
+**UI 상태:** `conflict`
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=1, sel=1, A_dirty=1, S_dirty=1
 
 **파이프라인:** (디렉토리는 A_dirty/S_dirty=false이므로 이 시나리오에 진입 불가.)
