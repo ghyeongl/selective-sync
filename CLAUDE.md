@@ -13,7 +13,7 @@ docker push ghcr.io/ghyeongl/selective-syncer:s6-arm64
 ### Deploy to homepi1
 
 ```bash
-ssh homepi1 'cd /home/pi/Devkits/packages/containers/selective-syncer && docker compose pull && docker compose up -d --force-recreate'
+ssh homepi1 'cd /home/pi/Devkits/packages/containers/selective-syncer && docker compose pull && docker compose up -d'
 ```
 
 ### Verify

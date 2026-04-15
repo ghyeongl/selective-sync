@@ -184,17 +184,28 @@ A_dirty, S_dirty 모두 유효.
 
 ### P2. 변경 동기화
 
-**진입조건:** A_disk=1 AND A_db=1 AND (A_dirty=1 OR S_dirty=1)
+**진입조건:** A_disk=1 AND A_db=1 AND (A_dirty=1 OR S_dirty=1 OR (S_disk=1 AND S_db=0))
 
-**동작:** A_dirty와 S_dirty를 동시에 평가:
+**동작:** 먼저 외부 유입(S_db=0 + S_disk=1)을 판별하고, 아니면 A_dirty와 S_dirty를 평가:
+
+**외부 유입 (S_db=0 + S_disk=1):**
+
+| selected | A_dirty | 동작 |
+|:---:|:---:|------|
+| 0 | 0 | p2ExternalAccept: SafeCopy S→A (Spoke wins), entries UPDATE(mtime, size, selected=1) |
+| 0 | 1 | p2ExternalConflict: Archives rename → conflict-{N}, entries INSERT(conflict, sel=1). SafeCopy S→A, entries UPDATE(mtime, size, selected=1) |
+| 1 | - | p2Reconcile: mtime 기반 copy 방향 결정 (디렉토리는 스킵, P4에서 baseline 생성) |
+
+**변경 동기화 (S_db=1 또는 S_disk=0):**
 
 | A_dirty | S_dirty | 동작 |
 |:---:|:---:|------|
 | 1 | N/A 또는 0 | entries UPDATE (mtime, size). selected=1 AND S_disk=1이면 추가로 SafeCopy A→S, spaces_view UPDATE |
 | 0 | 1 | SafeCopy S→A, entries UPDATE (mtime, size), spaces_view UPDATE (synced_mtime) |
-| 1 | 1 | **CONFLICT:** Archives/path → path_conflict-{N} rename, entries INSERT (conflict copy, selected=1). SafeCopy S→A, entries UPDATE, spaces_view UPDATE |
+| 1 | 1 (sel=1) | **CONFLICT:** Archives/path → path_conflict-{N} rename, entries INSERT (conflict copy, selected=1). SafeCopy S→A, entries UPDATE, spaces_view UPDATE |
+| 1 | 1 (sel=0) | **deselect 우선:** S_dirty 무시. entries UPDATE(mtime, size)만 실행. P3에서 MockDelete |
 
-**통과 후 보장:** A_dirty=0, S_dirty=0. 양쪽 디스크 내용과 DB mtime 일치.
+**통과 후 보장:** A_dirty=0, S_dirty=0 (또는 deselect 시 S_dirty는 P3 삭제로 소멸). 양쪽 디스크 내용과 DB mtime 일치.
 
 ### P3. 목표 상태 실현
 
@@ -352,14 +363,16 @@ A_dirty, S_dirty 모두 유효.
 **UI 상태:** `recovering`
 **Input:** A_disk=0, A_db=1, S_disk=1, S_db=0, sel=0
 
+**설계 근거:** S_db=0 + S_disk=1은 외부 유입 패턴과 동일. Archives 유실 후 Spaces에서 복구한 파일을 다시 삭제하는 것은 비합리적이므로 accept하여 synced로 수렴.
+
 **파이프라인:**
 - P0: A_disk=0, S_disk=1 → SafeCopy S→A. A_db=1 → entries UPDATE(mtime, size) → **A_disk=1, A_dirty=0**
 - P1: A_db=1 → 스킵
-- P2: 스킵
-- P3: sel=0, S_disk=1 → MockDelete S → **S_disk=0**
-- P4: 일치 → 스킵
+- P2: S_db=0 + S_disk=1 → 외부 유입 감지. entries UPDATE selected=1. SafeCopy S→A (Spoke wins) → entries UPDATE(mtime, size) → **sel=1**
+- P3: sel=1, S_disk=1 → 일치 → 스킵
+- P4: S_db=0 → spaces_view INSERT → **S_db=1**
 
-**Output:** → #15 (archived)
+**Output:** → #31 (synced)
 
 ---
 
@@ -474,8 +487,8 @@ A_dirty, S_dirty 모두 유효.
 
 **파이프라인:**
 - P0~P2: 스킵
-- P3: sel=1, S_disk=0 → SafeCopy A→S → **S_disk=1** (S_db=0이므로 spaces_view UPDATE 없음)
-- P4: S_disk=1, S_db=0 → spaces_view INSERT → **S_db=1**
+- P3: sel=1, S_disk=0, S_db=0 → 첫 동기화: SafeCopy A→S, spaces_view INSERT → **S_disk=1, S_db=1**
+- P4: 일치 → 스킵
 
 **Output:** → #31 (synced)
 
@@ -607,7 +620,8 @@ A_dirty, S_dirty 모두 유효.
 **Input:** A_disk=1, A_db=1, S_disk=1, S_db=0, sel=1, A_dirty=0
 
 **파이프라인:**
-- P0~P2: 스킵 (S_dirty N/A since S_db=0)
+- P0~P1: 스킵
+- P2: S_db=0 + S_disk=1 + sel=1 → p2Reconcile (baseline 없으므로 mtime 기반 copy 방향 결정). mtime 일치 시 스킵, 불일치 시 최신→구버전 SafeCopy
 - P3: sel=1, S_disk=1 → 일치 → 스킵
 - P4: S_disk=1, S_db=0 → spaces_view INSERT → **S_db=1**
 
@@ -812,16 +826,16 @@ FileBrowser의 네이티브 공유 기능으로 대체한다. (공유 링크, QR
 
 | UI 상태 | 레이블 | 해당 # | 조건 |
 |---------|--------|--------|------|
-| archived | archived | 15 | A_disk=1, A_db=1, S_disk=0, S_db=0, sel=0, A_dirty=0 |
+| archived | archived | 15, 16 | A_disk=1, A_db=1, S_disk=0, S_db=0, sel=0 |
 | synced | synced | 31 | A_disk=1, A_db=1, S_disk=1, S_db=1, sel=1, A_dirty=0, S_dirty=0 |
-| syncing | syncing | 17, 18 | sel=1, S_disk=0 |
-| removing | removing | 27, 28, 29 | sel=0, S_disk=1, S_db=1 |
-| updating | updating | 32, 33 | A_dirty XOR S_dirty (한쪽만 dirty) |
-| conflict | conflict | 30, 34 | A_dirty=1 AND S_dirty=1 |
+| syncing | syncing | 17, 18 | sel=1, S_disk=0, S_db=0 |
+| removing | removing | 27, 28, 29, 30 | sel=0, S_disk=1, S_db=1 |
+| updating | updating | 32, 33 | sel=1, A_dirty XOR S_dirty (한쪽만 dirty) |
+| conflict | conflict | 24, 34 | 양쪽 내용 충돌. #34: sel=1, A_dirty=1, S_dirty=1. #24: 외부 유입(S_db=0, S_disk=1) + A_dirty=1 |
 | recovering | recovering | 9~14 | A_disk=0, S_disk=1 (Archives 복구 중) |
 | lost | lost | 5~8 | A_disk=0, S_disk=0, A_db=1 (디스크 유실) |
 | untracked | untracked | 2, 3, 4 | A_db=0 (DB 미등록) |
-| repairing | repairing | 19~26 | S_db ↔ S_disk 불일치 |
+| repairing | repairing | 19~23, 25, 26 | S_db ↔ S_disk 불일치 (#24 제외, conflict로 분류) |
 
 데몬 처리 완료 시 실시간 갱신 (WebSocket 또는 polling)
 
