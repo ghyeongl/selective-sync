@@ -15,7 +15,7 @@ const TEST_DIR = process.env.TEST_DIR ?? "/tmp/e2e-sync-test";
 const ARCHIVES = process.env.E2E_ARCHIVES_DIR ?? path.join(TEST_DIR, "Archives");
 
 // Watcher debounce is 300ms; the catalog needs a moment to register the tree.
-const SETTLE = 6000;
+const SETTLE = 45000;
 
 async function apiLogin(page: Page): Promise<string> {
   let jwt = await page.evaluate(() => localStorage.getItem("jwt") ?? "");
@@ -56,18 +56,27 @@ test("reports identical sibling subtrees and skips byte-different ones", async (
 
   await page.goto("/");
   const jwt = await apiLogin(page);
-  await page.waitForTimeout(SETTLE);
 
-  const body = await page.evaluate(
-    async (jwt) => {
+  // The watcher debounces and the catalog registration is asynchronous; on a
+  // loaded Pi a fixed wait is not enough, so poll until the group appears.
+  const fetchDupes = async () =>
+    page.evaluate(async (jwt) => {
       const resp = await fetch("/api/sync/duplicates?min_files=2", {
         headers: { "X-Auth": jwt },
       });
       if (!resp.ok) throw new Error(`duplicates failed: ${resp.status}`);
       return resp.json();
-    },
-    jwt
-  );
+    }, jwt);
+
+  let body = await fetchDupes();
+  const deadline = Date.now() + SETTLE;
+  while (
+    Date.now() < deadline &&
+    !body.groups?.some((g: { parentPath: string }) => g.parentPath === "dupe-probe")
+  ) {
+    await page.waitForTimeout(2000);
+    body = await fetchDupes();
+  }
 
   expect(Array.isArray(body.groups)).toBe(true);
   expect(typeof body.reclaimable).toBe("number");

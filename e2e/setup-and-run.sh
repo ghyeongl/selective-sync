@@ -15,8 +15,11 @@ for d in "$ARCHIVES_DIR" "$SPACES_DIR"; do
   case "$d" in
     /|/srv|/home|"$HOME") echo "refusing to clear $d" >&2; exit 1 ;;
   esac
-  rm -rf "${d:?}/." 2>/dev/null || true
+  # Not `rm -rf "$d/."` — rm refuses to remove '.' and silently skips, which
+  # left Spaces populated across runs and made freshly seeded entries register
+  # as synced. find -mindepth 1 empties the directory without touching it.
   mkdir -p "$d"
+  find "$d" -mindepth 1 -delete
 done
 mkdir -p "$ARCHIVES_DIR/test-dir"
 
