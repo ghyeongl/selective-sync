@@ -16,7 +16,10 @@ const ARCHIVES = process.env.E2E_ARCHIVES_DIR ?? path.join(TEST_DIR, "Archives")
 const SPACES = process.env.E2E_SPACES_DIR ?? path.join(TEST_DIR, "Spaces");
 
 // Watcher debounce is 300ms; the catalog needs a moment to register the tree.
-const SETTLE = 45000;
+// The daemon may be working through 1 GB copies from earlier specs when this
+// runs, so catalog registration lags well past the idle case (~12s measured by
+// hand). Poll generously; it exits as soon as the group appears.
+const SETTLE = 180000;
 
 async function apiLogin(page: Page): Promise<string> {
   let jwt = await page.evaluate(() => localStorage.getItem("jwt") ?? "");
