@@ -16,6 +16,12 @@ const EXTERNAL_URL = process.env.E2E_BASE_URL;
 
 export default defineConfig({
   testDir: "./tests",
+  // mass-files.spec.ts is opt-in and has its own config: it needs
+  // MASS_FILE_COUNT seeded and a 15-minute per-test timeout, against the
+  // 2 minutes here. Under this config it falls back to creating 10,000 files
+  // inline, which cannot finish in time on a Pi.
+  //   npx playwright test --config mass-files.config.ts
+  testIgnore: "mass-files.spec.ts",
   timeout: 120_000,
   expect: { timeout: 30_000 },
   retries: 0,
