@@ -11,6 +11,8 @@ import fs from "fs";
 import path from "path";
 
 const TEST_DIR = process.env.TEST_DIR ?? "/tmp/e2e-sync-test";
+const ARCHIVES = process.env.E2E_ARCHIVES_DIR ?? path.join(TEST_DIR, "Archives");
+const SPACES = process.env.E2E_SPACES_DIR ?? path.join(TEST_DIR, "Spaces");
 
 // ────────────────────────────────────────────
 // API helpers — safe JSON parse, explicit login
@@ -171,7 +173,7 @@ test.describe.serial("Large File Operations", () => {
 
     await waitFileStatus(page, jwt, "large-file.dat", "synced", 60_000);
 
-    const spacesPath = path.join(TEST_DIR, "Spaces", "large-file.dat");
+    const spacesPath = path.join(SPACES, "large-file.dat");
     expect(fs.existsSync(spacesPath)).toBe(true);
     expect(fs.statSync(spacesPath).size).toBe(50 * 1024 * 1024);
   });
@@ -185,7 +187,7 @@ test.describe.serial("Large File Operations", () => {
 
     await waitFileStatus(page, jwt, "large-file.dat", "archived", 60_000);
     expect(
-      fs.existsSync(path.join(TEST_DIR, "Spaces", "large-file.dat"))
+      fs.existsSync(path.join(SPACES, "large-file.dat"))
     ).toBe(false);
   });
 
@@ -205,7 +207,7 @@ test.describe.serial("Large File Operations", () => {
 
     await waitFileStatus(page, jwt, "large-file.dat", "archived", 60_000);
     expect(
-      fs.existsSync(path.join(TEST_DIR, "Spaces", "large-file.dat"))
+      fs.existsSync(path.join(SPACES, "large-file.dat"))
     ).toBe(false);
   });
 });
@@ -238,7 +240,7 @@ test.describe.serial("Rapid Multi-Request: Burst Select", () => {
 
     for (let i = 1; i <= 20; i++) {
       expect(
-        fs.existsSync(path.join(TEST_DIR, "Spaces", `small-${i}.txt`))
+        fs.existsSync(path.join(SPACES, `small-${i}.txt`))
       ).toBe(true);
     }
   });
@@ -268,7 +270,7 @@ test.describe.serial("Rapid Multi-Request: Burst Select", () => {
 
     for (let i = 1; i <= 20; i++) {
       expect(
-        fs.existsSync(path.join(TEST_DIR, "Spaces", `small-${i}.txt`))
+        fs.existsSync(path.join(SPACES, `small-${i}.txt`))
       ).toBe(false);
     }
   });
@@ -367,7 +369,7 @@ test.describe.serial("Rapid Toggle Stress", () => {
     await page.waitForTimeout(3000);
     await waitFileStatus(page, jwt, "medium-1.dat", "archived", 30_000);
     expect(
-      fs.existsSync(path.join(TEST_DIR, "Spaces", "medium-1.dat"))
+      fs.existsSync(path.join(SPACES, "medium-1.dat"))
     ).toBe(false);
   });
 
@@ -408,7 +410,7 @@ test.describe.serial("Rapid Toggle Stress", () => {
     await page.waitForTimeout(3000);
     await waitFileStatus(page, jwt, "medium-2.dat", "synced", 30_000);
     expect(
-      fs.existsSync(path.join(TEST_DIR, "Spaces", "medium-2.dat"))
+      fs.existsSync(path.join(SPACES, "medium-2.dat"))
     ).toBe(true);
   });
 });
@@ -461,10 +463,10 @@ test.describe.serial("Concurrent Mixed Operations", () => {
     await waitFileStatus(page, jwt, "medium-4.dat", "archived", 30_000);
 
     expect(
-      fs.existsSync(path.join(TEST_DIR, "Spaces", "medium-3.dat"))
+      fs.existsSync(path.join(SPACES, "medium-3.dat"))
     ).toBe(true);
     expect(
-      fs.existsSync(path.join(TEST_DIR, "Spaces", "medium-4.dat"))
+      fs.existsSync(path.join(SPACES, "medium-4.dat"))
     ).toBe(false);
   });
 
@@ -506,10 +508,10 @@ test.describe.serial("Concurrent Mixed Operations", () => {
 
     await waitFileStatus(page, jwt, "medium-5.dat", "synced", 30_000);
     expect(
-      fs.existsSync(path.join(TEST_DIR, "Spaces", "medium-5.dat"))
+      fs.existsSync(path.join(SPACES, "medium-5.dat"))
     ).toBe(true);
     expect(
-      fs.statSync(path.join(TEST_DIR, "Spaces", "medium-5.dat")).size
+      fs.statSync(path.join(SPACES, "medium-5.dat")).size
     ).toBe(1024 * 1024);
   });
 });
@@ -540,7 +542,7 @@ test.describe("Folder Operations", () => {
     for (let i = 1; i <= 10; i++) {
       expect(
         fs.existsSync(
-          path.join(TEST_DIR, "Spaces", "test-dir", `child-${i}.txt`)
+          path.join(SPACES, "test-dir", `child-${i}.txt`)
         )
       ).toBe(true);
     }

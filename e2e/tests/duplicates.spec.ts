@@ -13,6 +13,7 @@ import path from "path";
 
 const TEST_DIR = process.env.TEST_DIR ?? "/tmp/e2e-sync-test";
 const ARCHIVES = process.env.E2E_ARCHIVES_DIR ?? path.join(TEST_DIR, "Archives");
+const SPACES = process.env.E2E_SPACES_DIR ?? path.join(TEST_DIR, "Spaces");
 
 // Watcher debounce is 300ms; the catalog needs a moment to register the tree.
 const SETTLE = 45000;
