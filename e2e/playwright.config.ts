@@ -22,7 +22,11 @@ export default defineConfig({
   // inline, which cannot finish in time on a Pi.
   //   npx playwright test --config mass-files.config.ts
   testIgnore: "mass-files.spec.ts",
-  timeout: 120_000,
+  // 120s was tuned for a locally built binary on a Mac. In container mode the
+  // suite runs against a Pi copying 1 GB SD-to-SD — copy-interrupt does that
+  // twice in one test — so the budget has to cover the hardware, not the
+  // laptop. These were timeouts, not sync faults.
+  timeout: EXTERNAL_URL ? 420_000 : 120_000,
   expect: { timeout: 30_000 },
   retries: 0,
   workers: 1, // sequential — shared server state

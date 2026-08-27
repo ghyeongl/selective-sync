@@ -39,6 +39,12 @@ function writeTree(dir: string, files: Record<string, string>) {
   }
 }
 
+// Leave nothing behind: fixtures created here otherwise appear in later
+// specs' listings and read as stale state.
+test.afterAll(() => {
+  fs.rmSync(path.join(ARCHIVES, "dupe-probe"), { recursive: true, force: true });
+});
+
 test("reports identical sibling subtrees and skips byte-different ones", async ({
   page,
 }) => {
