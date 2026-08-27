@@ -19,8 +19,8 @@ import path from "path";
 import { execSync } from "child_process";
 
 const TEST_DIR = process.env.TEST_DIR ?? "/tmp/e2e-sync-test";
-const ARCHIVES = path.join(TEST_DIR, "Archives");
-const SPACES = path.join(TEST_DIR, "Spaces");
+const ARCHIVES = process.env.E2E_ARCHIVES_DIR ?? path.join(TEST_DIR, "Archives");
+const SPACES = process.env.E2E_SPACES_DIR ?? path.join(TEST_DIR, "Spaces");
 const MASS_DIR = path.join(ARCHIVES, "mass-test");
 const SCRIPT = path.resolve(__dirname, "../create-mass-files.sh");
 

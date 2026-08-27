@@ -8,6 +8,12 @@ const BINARY =
   path.resolve(__dirname, "../filebrowser/filebrowser-darwin-arm64");
 const SETUP_SCRIPT = path.resolve(__dirname, "setup-and-run.sh");
 
+// Container mode: when E2E_BASE_URL is set the suite runs against an already
+// running selective-syncer container (the deployable artefact) instead of a
+// locally built binary, so CI tests what actually ships. The caller owns
+// starting the container and seeding TEST_DIR via setup-and-run.sh.
+const EXTERNAL_URL = process.env.E2E_BASE_URL;
+
 export default defineConfig({
   testDir: "./tests",
   timeout: 120_000,
@@ -15,11 +21,11 @@ export default defineConfig({
   retries: 0,
   workers: 1, // sequential — shared server state
   use: {
-    baseURL: `http://127.0.0.1:${PORT}`,
+    baseURL: EXTERNAL_URL ?? `http://127.0.0.1:${PORT}`,
     headless: true,
     actionTimeout: 10_000,
   },
-  webServer: {
+  ...(EXTERNAL_URL ? {} : { webServer: {
     command: [
       `TEST_DIR=${TEST_DIR}`,
       `bash ${SETUP_SCRIPT}`,
@@ -37,5 +43,5 @@ export default defineConfig({
     timeout: 60_000,
     stdout: "pipe",
     stderr: "pipe",
-  },
+  } }),
 });
