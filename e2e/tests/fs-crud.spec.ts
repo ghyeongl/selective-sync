@@ -284,7 +284,13 @@ test.describe.serial("Spaces direct manipulation", () => {
       fs.unlinkSync(path.join(ARCHIVES, "spoke-new.txt"));
   });
 
-  test("delete synced file from Spaces directly → pipeline re-syncs", async ({
+  // PRD scenario #21: an external Spaces deletion is read as user intent, so
+  // the pipeline deselects rather than re-copying — re-copying would fight
+  // Syncthing propagating a spoke's deletion. This spec previously asserted a
+  // restore; it was written 2026-02-14, three weeks before that design
+  // decision (ec9cf505 / PRD 3246e9c), and never updated because the e2e suite
+  // did not run in CI. See docs/BUG-selected-not-restored.md for the effect.
+  test("delete synced file from Spaces directly → pipeline deselects", async ({
     page,
   }) => {
     const jwt = await loginAndWait(page);
@@ -312,23 +318,24 @@ test.describe.serial("Spaces direct manipulation", () => {
     fs.unlinkSync(path.join(SPACES, "small-1.txt"));
     await page.waitForTimeout(WATCHER_SETTLE);
 
-    // Pipeline should detect mismatch (selected=true, S_disk=false)
-    // and re-copy from Archives → Spaces
-    await page.waitForTimeout(5000);
-    await pollUntil(
+    // P3 sees selected=1, S_disk=0, S_db=1 → external deletion → deselect,
+    // then P4 drops the spaces_view row, landing on #15 (archived).
+    const items = await pollUntil(
       page,
       jwt,
-      (items) =>
-        items.some(
-          (i: any) => i.name === "small-1.txt" && i.status === "synced"
+      (i: any[]) =>
+        i.some(
+          (e: any) => e.name === "small-1.txt" && e.status === "archived"
         ),
       30_000
     );
-    expect(fs.existsSync(path.join(SPACES, "small-1.txt"))).toBe(true);
+    const entry = items.find((e: any) => e.name === "small-1.txt");
+    expect(entry.selected, "external deletion clears selected").toBe(false);
 
-    // Cleanup: deselect
-    await apiDeselect(page, jwt, [small1.inode]);
-    await page.waitForTimeout(3000);
+    // Archives keeps the file: this is a visibility change, not data loss.
+    expect(fs.existsSync(path.join(ARCHIVES, "small-1.txt"))).toBe(true);
+    // And it is not silently re-copied.
+    expect(fs.existsSync(path.join(SPACES, "small-1.txt"))).toBe(false);
   });
 
   test("modify synced file in Spaces directly → conflict or re-sync", async ({

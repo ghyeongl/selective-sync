@@ -564,7 +564,11 @@ test.describe.serial("Operations during 1GB copy", () => {
       fs.unlinkSync(path.join(ARCHIVES, "spoke-during-copy.txt"));
   });
 
-  test("select 1GB → synced → delete Spaces copy → pipeline re-copies", async ({
+  // PRD scenario #21: an external Spaces deletion is user intent, so the
+  // pipeline deselects instead of re-copying. Asserting a re-copy here also
+  // meant re-transferring 1 GB on every run. See the matching note in
+  // fs-crud.spec.ts and docs/BUG-selected-not-restored.md.
+  test("select 1GB → synced → delete Spaces copy → pipeline deselects", async ({
     page,
   }) => {
     const jwt = await loginAndWait(page);
@@ -583,30 +587,28 @@ test.describe.serial("Operations during 1GB copy", () => {
       180_000
     );
 
-    // Now delete the Spaces copy — pipeline should detect S_disk=0
-    // and re-copy from Archives (sel=1, A_disk=1, S_disk=0 → P3: SafeCopy A→S)
+    // Delete the Spaces copy — P3 sees sel=1, S_disk=0, S_db=1 and reads it as
+    // an external deletion, so it deselects rather than re-copying.
     const spacesGiant = path.join(SPACES, "giant-file.dat");
     expect(fs.existsSync(spacesGiant)).toBe(true);
     fs.unlinkSync(spacesGiant);
 
-    // Wait for re-copy to complete
-    await pollUntil(
+    const items = await pollUntil(
       page,
       jwt,
-      (items) => {
-        const g = items.find((i: any) => i.name === "giant-file.dat");
-        return g != null && g.status === "synced";
+      (i: any[]) => {
+        const g = i.find((e: any) => e.name === "giant-file.dat");
+        return g != null && g.status === "archived";
       },
       180_000
     );
+    const giantAfter = items.find((e: any) => e.name === "giant-file.dat");
+    expect(giantAfter.selected, "external deletion clears selected").toBe(false);
 
-    expect(fs.existsSync(spacesGiant)).toBe(true);
-    expect(fs.statSync(spacesGiant).size).toBe(1024 * 1024 * 1024);
+    // Not re-copied, and Archives still holds it — a visibility change only.
+    expect(fs.existsSync(spacesGiant)).toBe(false);
+    expect(fs.existsSync(path.join(ARCHIVES, "giant-file.dat"))).toBe(true);
     expect(noTmpFiles()).toBe(true);
-
-    // Cleanup
-    await apiDeselect(page, jwt, [giant.inode]);
-    await page.waitForTimeout(5000);
   });
 
   test("select 1GB → API burst (10 different files) during copy → all processed", async ({
