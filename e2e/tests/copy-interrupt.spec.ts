@@ -686,7 +686,15 @@ test.describe.serial("Operations during 1GB copy", () => {
     // Select folder while worker is busy copying giant
     expect(await apiSelect(page, jwt, [testDir.inode])).toBe(200);
 
-    // Both should converge: giant=synced, test-dir + all children=synced
+    // Both should converge: giant=synced, test-dir + all children=synced.
+    //
+    // A directory's status reflects the directory itself, not its subtree, so
+    // test-dir reads "synced" as soon as the folder exists in Spaces — while
+    // its children are still queued behind the 1 GB copy. Waiting on that alone
+    // and then asserting every child is synced is a race the test loses
+    // whenever the copy is slow, which on an SD-backed Pi is most of the time.
+    // childStableCount/childTotalCount is the condition that actually means
+    // "the subtree settled".
     await pollUntil(
       page,
       jwt,
@@ -697,7 +705,9 @@ test.describe.serial("Operations during 1GB copy", () => {
           g != null &&
           g.status === "synced" &&
           td != null &&
-          td.status === "synced"
+          td.status === "synced" &&
+          td.childTotalCount != null &&
+          td.childStableCount === td.childTotalCount
         );
       },
       180_000
