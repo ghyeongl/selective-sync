@@ -148,19 +148,9 @@ async function loginAndWait(page: Page, minEntries = 25) {
 // Tests
 // ────────────────────────────────────────────
 
-test.describe("Infrastructure", () => {
-  test("server boots, entries registered by seed", async ({ page }) => {
-    const jwt = await loginAndWait(page, 25);
-    const data = await fetchEntries(page, jwt);
-    // 20 small + 5 medium + 1 large + 1 test-dir = 27
-    expect(data.items.length).toBeGreaterThanOrEqual(27);
-
-    // All should start as "archived" (sel=0, S_disk=0)
-    for (const item of data.items) {
-      expect(item.status).toBe("archived");
-    }
-  });
-});
+// The boot-state check moved to 00-boot.spec.ts: it asserts a freshly seeded
+// environment, which is only true before any other spec has run, and this file
+// executes fourth.
 
 test.describe.serial("Large File Operations", () => {
   test("50MB select → synced", async ({ page }) => {
