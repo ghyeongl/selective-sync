@@ -123,3 +123,66 @@ test("renaming a synced file keeps its checkbox, with no reload", async ({
   );
   await expect(renamedBox).toBeChecked({ timeout: 30_000 });
 });
+
+/**
+ * A deselect the DAEMON decided must reach the live page too.
+ *
+ * Found barefoot on pi3: delete a synced file from Spaces (scenario #21,
+ * external deletion), and the daemon deselects it — backend reads
+ * sel=False archived — while the open page keeps the checkbox ticked. Measured
+ * still ticked after 50s.
+ *
+ * The user's own toggles were fine, because select/deselect refresh via
+ * fetchEntries. Only daemon-initiated changes had no route to the UI: the SSE
+ * event carried status but nothing about selection.
+ *
+ * Note this deletes from Spaces only. Archives keeps the file, which is what
+ * makes it a deselect rather than a loss.
+ */
+const EXT = "overlay-external.txt";
+
+test("a deselect the daemon decides reaches the page, with no reload", async ({
+  page,
+}) => {
+  fs.writeFileSync(path.join(ARCHIVES, EXT), "external deletion fixture");
+
+  await page.goto("/");
+  await page.waitForTimeout(3000);
+  const jwt = await apiLogin(page);
+
+  await expect
+    .poll(async () => (await syncEntry(page, jwt, EXT)) !== null, {
+      timeout: 30_000,
+    })
+    .toBe(true);
+  await page.reload();
+  await page.waitForTimeout(2000);
+
+  const row = page.locator(`[aria-label="${EXT}"]`);
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  const box = row.locator('input[type="checkbox"]');
+  if (!(await box.isChecked())) {
+    await box.click();
+  }
+  await expect
+    .poll(async () => (await syncEntry(page, jwt, EXT))?.selected, {
+      timeout: 60_000,
+    })
+    .toBe(true);
+  await expect
+    .poll(async () => fs.existsSync(path.join(SPACES, EXT)), { timeout: 60_000 })
+    .toBe(true);
+
+  // Remove it from Spaces behind the daemon's back. No reload from here on.
+  fs.rmSync(path.join(SPACES, EXT), { force: true });
+
+  // The daemon must reach sel=false, so a failure below is about the frontend.
+  await expect
+    .poll(async () => (await syncEntry(page, jwt, EXT))?.selected, {
+      timeout: 90_000,
+    })
+    .toBe(false);
+
+  // And the open page must show it.
+  await expect(box).not.toBeChecked({ timeout: 30_000 });
+});
