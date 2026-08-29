@@ -21,6 +21,25 @@ import path from "path";
 // windows below are reachable at all.
 const GIANT_BYTES = 256 * 1024 * 1024;
 
+// Recreate giant-file.dat at GIANT_BYTES if an earlier test unlinked it.
+//
+// This used to be inlined twice, both writing 1 GiB regardless of the size
+// setup-and-run.sh had created. An earlier test in this file deletes the
+// fixture, so those blocks — not the setup script — decided the size for every
+// test after it, and resizing the fixture had no effect on them at all.
+async function ensureGiantFile() {
+  const giantPath = path.join(ARCHIVES, "giant-file.dat");
+  if (fs.existsSync(giantPath)) return;
+  const fd = fs.openSync(giantPath, "w");
+  const chunk = Buffer.alloc(1024 * 1024);
+  for (let i = 0; i < GIANT_BYTES / chunk.length; i++) {
+    fs.writeSync(fd, chunk);
+  }
+  fs.closeSync(fd);
+  // Wait for watcher to detect
+  await new Promise((r) => setTimeout(r, 2000));
+}
+
 const TEST_DIR = process.env.TEST_DIR ?? "/tmp/e2e-sync-test";
 const ARCHIVES = process.env.E2E_ARCHIVES_DIR ?? path.join(TEST_DIR, "Archives");
 const SPACES = process.env.E2E_SPACES_DIR ?? path.join(TEST_DIR, "Spaces");
@@ -221,18 +240,8 @@ test.describe.serial("1GB Copy Interruption", () => {
   test("select 1GB → immediate mtime touch → ErrSourceModified or re-sync", async ({
     page,
   }) => {
-    // Ensure giant file exists
     const giantPath = path.join(ARCHIVES, "giant-file.dat");
-    if (!fs.existsSync(giantPath)) {
-      const fd = fs.openSync(giantPath, "w");
-      const chunk = Buffer.alloc(1024 * 1024);
-      for (let i = 0; i < 1024; i++) {
-        fs.writeSync(fd, chunk);
-      }
-      fs.closeSync(fd);
-      // Wait for watcher to detect
-      await new Promise((r) => setTimeout(r, 2000));
-    }
+    await ensureGiantFile();
 
     const jwt = await loginAndWait(page);
     await pollUntil(
@@ -280,15 +289,7 @@ test.describe.serial("1GB Copy Interruption", () => {
     page,
   }) => {
     const giantPath = path.join(ARCHIVES, "giant-file.dat");
-    if (!fs.existsSync(giantPath)) {
-      const fd = fs.openSync(giantPath, "w");
-      const chunk = Buffer.alloc(1024 * 1024);
-      for (let i = 0; i < 1024; i++) {
-        fs.writeSync(fd, chunk);
-      }
-      fs.closeSync(fd);
-      await new Promise((r) => setTimeout(r, 2000));
-    }
+    await ensureGiantFile();
 
     const jwt = await loginAndWait(page);
     await pollUntil(
