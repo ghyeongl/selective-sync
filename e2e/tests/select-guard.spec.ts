@@ -6,7 +6,7 @@
  * which matches every top-level entry — so one request selected the entire
  * archive and began syncing all of it. Found by hand against the staging
  * container: a single {"inodes":[0]} flipped all 28 top-level entries to
- * selected and started copying a 1 GiB fixture.
+ * selected and started copying the giant fixture.
  */
 import { test, expect, type Page } from "@playwright/test";
 

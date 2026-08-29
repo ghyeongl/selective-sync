@@ -16,6 +16,11 @@ import { test, expect, type Page } from "@playwright/test";
 import fs from "fs";
 import path from "path";
 
+// Size of giant-file.dat, which e2e/setup-and-run.sh creates. Keep the two in
+// step: pi3 copies at ~5.5 MB/s, so this figure decides whether the poll
+// windows below are reachable at all.
+const GIANT_BYTES = 256 * 1024 * 1024;
+
 const TEST_DIR = process.env.TEST_DIR ?? "/tmp/e2e-sync-test";
 const ARCHIVES = process.env.E2E_ARCHIVES_DIR ?? path.join(TEST_DIR, "Archives");
 const SPACES = process.env.E2E_SPACES_DIR ?? path.join(TEST_DIR, "Spaces");
@@ -130,7 +135,7 @@ test.describe.serial("1GB Copy Interruption", () => {
     expect(giant).toBeTruthy();
     expect(giant.status).toBe("archived");
     const stat = fs.statSync(path.join(ARCHIVES, "giant-file.dat"));
-    expect(stat.size).toBe(1024 * 1024 * 1024);
+    expect(stat.size).toBe(GIANT_BYTES);
   });
 
   test("select 1GB → immediate deselect → final state archived, no tmp", async ({
@@ -263,7 +268,7 @@ test.describe.serial("1GB Copy Interruption", () => {
 
     const spacesPath = path.join(SPACES, "giant-file.dat");
     expect(fs.existsSync(spacesPath)).toBe(true);
-    expect(fs.statSync(spacesPath).size).toBe(1024 * 1024 * 1024);
+    expect(fs.statSync(spacesPath).size).toBe(GIANT_BYTES);
     expect(noTmpFiles()).toBe(true);
 
     // Cleanup
@@ -319,7 +324,7 @@ test.describe.serial("1GB Copy Interruption", () => {
 
     expect(fs.existsSync(path.join(SPACES, "giant-file.dat"))).toBe(true);
     expect(fs.statSync(path.join(SPACES, "giant-file.dat")).size).toBe(
-      1024 * 1024 * 1024
+      GIANT_BYTES
     );
     expect(noTmpFiles()).toBe(true);
 

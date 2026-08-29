@@ -37,9 +37,16 @@ done
 echo "Creating 50MB test file..."
 dd if=/dev/zero of="$ARCHIVES_DIR/large-file.dat" bs=1048576 count=50 2>/dev/null
 
-# 1 giant file (~1GB) for copy-interruption tests
-echo "Creating 1GB test file..."
-dd if=/dev/zero of="$ARCHIVES_DIR/giant-file.dat" bs=1048576 count=1024 2>/dev/null
+# 1 giant file for copy-interruption tests.
+#
+# 256 MiB, not 1 GiB. pi3 copies at ~5.5 MB/s, so a 1 GiB fixture took 178-193s
+# against poll windows of 120s and 180s — the group could not pass, and which
+# tests tipped over varied with load. At 256 MiB a copy is ~48s, which still
+# leaves ample room to interrupt while giving those windows 2.5-3.7x headroom.
+#
+# Keep in step with GIANT_BYTES in e2e/tests/copy-interrupt.spec.ts.
+echo "Creating 256MiB test file..."
+dd if=/dev/zero of="$ARCHIVES_DIR/giant-file.dat" bs=1048576 count=256 2>/dev/null
 
 # 10 children in test-dir
 for i in $(seq 1 10); do
