@@ -147,7 +147,7 @@ test.describe.serial("1GB Copy Interruption", () => {
     // already be done, or it might still be in progress.
     // Either way: deselect pushes the path to queue.
     //   Case A (copy in progress): hasQueued() → true → SafeCopy aborts → re-eval with sel=0
-    //   Case B (copy done): re-eval sees sel=0 → P3 removes from Spaces
+    //   Case B (copy done): re-eval sees sel=0 → P4 removes from Spaces
     expect(await apiDeselect(page, jwt, [giant.inode])).toBe(200);
 
     // Final state: archived (sel=0)
@@ -182,11 +182,11 @@ test.describe.serial("1GB Copy Interruption", () => {
     // On Unix, open file handles survive unlink — SafeCopy may complete.
     //   Case A (SafeCopy fails on read/mtime): error, tmp cleaned
     //   Case B (SafeCopy completes → Spaces copy exists):
-    //     Watcher re-queues → A_disk=0, S_disk=1 → P0 recovers S→A
+    //     Watcher re-queues → A_disk=0, S_disk=1 → P1 recovers S→A
     fs.unlinkSync(path.join(ARCHIVES, "giant-file.dat"));
 
     // The pipeline must converge to one of:
-    // - Recovered: Archives restored from Spaces (P0 recovery), status=synced
+    // - Recovered: Archives restored from Spaces (P1 recovery), status=synced
     // - Cleaned up: entry removed, no Spaces copy
     // Both are valid. Wait for a stable terminal state.
     await pollUntil(
@@ -246,7 +246,7 @@ test.describe.serial("1GB Copy Interruption", () => {
     // Touch mtime IMMEDIATELY — no waiting
     //   If copy not started yet: watcher queues → hasQueued() aborts copy → re-eval
     //   If copy in progress: SafeCopy's mtime check may fail → ErrSourceModified
-    //   If copy done: watcher queues → P2 detects A_dirty → re-sync
+    //   If copy done: watcher queues → P3 detects A_dirty → re-sync
     const now = new Date();
     fs.utimesSync(giantPath, now, now);
 
@@ -526,7 +526,7 @@ test.describe.serial("Operations during 1GB copy", () => {
       "spoke created this"
     );
 
-    // Giant should sync, Spoke file should be recovered (P0: S→A, P1: register sel=1)
+    // Giant should sync, Spoke file should be recovered (P1: S→A, P2: register sel=1)
     await pollUntil(
       page,
       jwt,
@@ -587,7 +587,7 @@ test.describe.serial("Operations during 1GB copy", () => {
       180_000
     );
 
-    // Delete the Spaces copy — P3 sees sel=1, S_disk=0, S_db=1 and reads it as
+    // Delete the Spaces copy — P4 sees sel=1, S_disk=0, S_db=1 and reads it as
     // an external deletion, so it deselects rather than re-copying.
     const spacesGiant = path.join(SPACES, "giant-file.dat");
     expect(fs.existsSync(spacesGiant)).toBe(true);

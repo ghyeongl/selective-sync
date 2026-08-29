@@ -23,3 +23,6 @@ Thumbs.db
 
 .playwright-mcp/
 node_modules/
+
+# Agent/session state
+.omc/

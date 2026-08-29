@@ -452,7 +452,7 @@ test.describe.serial("Mass file operations", () => {
 
     // Pipeline should:
     // - Detect A_disk=0 for deleted files
-    // - P0: S_disk=1 → recover S→A (since selected=true, Spaces copy exists)
+    // - P1: S_disk=1 → recover S→A (since selected=true, Spaces copy exists)
     // OR: clean up if both gone
 
     // Wait for convergence — either recovered or cleaned up

@@ -249,10 +249,10 @@ test.describe.serial("Spaces direct manipulation", () => {
     await page.waitForTimeout(WATCHER_SETTLE);
 
     // Pipeline flow:
-    //   P0: S_disk=1, A_disk=0 → SafeCopy S→A (recover to Archives)
-    //   P1: A_db=0, A_disk=1 → register entry with selected=S_disk=true
-    //   P3: selected=1, S_disk=1 → match, skip (keeps Spaces file)
-    //   P4: S_db != S_disk → insert spaces_view
+    //   P1: S_disk=1, A_disk=0 → SafeCopy S→A (recover to Archives)
+    //   P2: A_db=0, A_disk=1 → register entry with selected=S_disk=true
+    //   P4: selected=1, S_disk=1 → match, skip (keeps Spaces file)
+    //   P5: S_db != S_disk → insert spaces_view
     // Result: file exists in BOTH Archives and Spaces, selected=true
 
     // Wait for entry to appear as "synced" (sel=1, S_disk=1)
@@ -318,8 +318,8 @@ test.describe.serial("Spaces direct manipulation", () => {
     fs.unlinkSync(path.join(SPACES, "small-1.txt"));
     await page.waitForTimeout(WATCHER_SETTLE);
 
-    // P3 sees selected=1, S_disk=0, S_db=1 → external deletion → deselect,
-    // then P4 drops the spaces_view row, landing on #15 (archived).
+    // P4 sees selected=1, S_disk=0, S_db=1 → external deletion → deselect,
+    // then P5 drops the spaces_view row, landing on #15 (archived).
     const items = await pollUntil(
       page,
       jwt,
@@ -481,7 +481,7 @@ test.describe.serial("Archives modification of synced files", () => {
     fs.unlinkSync(path.join(ARCHIVES, "after-rename.txt"));
   });
 
-  test("delete Archives file while synced → P0 recovers from Spaces", async ({
+  test("delete Archives file while synced → P1 recovers from Spaces", async ({
     page,
   }) => {
     const jwt = await loginAndWait(page);
@@ -515,7 +515,7 @@ test.describe.serial("Archives modification of synced files", () => {
     fs.unlinkSync(path.join(ARCHIVES, "will-delete.txt"));
     await page.waitForTimeout(WATCHER_SETTLE);
 
-    // Pipeline: A_disk=0, S_disk=1, sel=1 → P0 recovers S→A
+    // Pipeline: A_disk=0, S_disk=1, sel=1 → P1 recovers S→A
     // Archives file should be restored from Spaces copy
     // Entry should converge back to synced state
     await pollUntil(
