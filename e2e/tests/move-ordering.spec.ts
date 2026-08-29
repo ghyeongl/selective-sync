@@ -130,3 +130,109 @@ test("a source-first move relocates instead of duplicating", async ({ page }) =>
   const rootAfter = await listPath(page, jwt, "");
   expect(rootAfter!.some((i) => i.name === SRC)).toBe(false);
 });
+
+/**
+ * Moving a synced FOLDER must relocate the subtree, not re-register it.
+ *
+ * This is the shape of a bulk reorganisation, and it had no e2e coverage while
+ * it was broken. P0 identified directories by mtime, which is never refreshed
+ * for a directory row — dirs are deliberately never A_dirty — so the row's
+ * mtime is frozen at registration and drifts the moment a child is added.
+ * Every real folder move was therefore rejected as "content differs", and:
+ *
+ *   - p2 relocated the row through its stale-inode path with sel = S_disk,
+ *     false at the new location, so the whole subtree lost its selection
+ *   - Spaces was never renamed, leaving an orphan at the old path
+ *   - P1 promoted that orphan back, producing an empty phantom folder
+ *     reporting itself synced
+ *
+ * The subtree here gains a file AFTER the folder is registered, which is what
+ * makes the row's mtime stale. A folder registered with its contents already
+ * in place would not reproduce it — the ordinary state of a real folder is the
+ * one that breaks.
+ */
+const F_SRC = "a-dir-src";
+const F_DST = "zz-dir-dst";
+
+test.afterAll(() => {
+  for (const root of [ARCHIVES, SPACES]) {
+    fs.rmSync(path.join(root, F_SRC), { recursive: true, force: true });
+    fs.rmSync(path.join(root, F_DST), { recursive: true, force: true });
+  }
+});
+
+test("moving a synced folder relocates the subtree and keeps selection", async ({
+  page,
+}) => {
+  fs.mkdirSync(path.join(ARCHIVES, F_SRC), { recursive: true });
+  fs.mkdirSync(path.join(ARCHIVES, F_DST), { recursive: true });
+
+  await page.goto("/");
+  await page.waitForTimeout(3000);
+  const jwt = await apiLogin(page);
+
+  // Register the folder FIRST, then add a child — this is what makes the row's
+  // recorded mtime stale, and it is the case that used to fail.
+  await expect
+    .poll(async () => (await listPath(page, jwt, ""))?.some((i) => i.name === F_SRC), {
+      timeout: 30_000,
+    })
+    .toBe(true);
+  fs.writeFileSync(path.join(ARCHIVES, F_SRC, "leaf.txt"), "leaf payload");
+  await expect
+    .poll(async () => (await listPath(page, jwt, F_SRC))?.some((i) => i.name === "leaf.txt"), {
+      timeout: 30_000,
+    })
+    .toBe(true);
+
+  const folder = (await listPath(page, jwt, ""))!.find((i) => i.name === F_SRC)!;
+  const leafBefore = (await listPath(page, jwt, F_SRC))!.find((i) => i.name === "leaf.txt")!;
+
+  const status = await page.evaluate(
+    async ({ jwt, inode }) => {
+      const r = await fetch("/api/sync/select", {
+        method: "POST",
+        headers: { "X-Auth": jwt, "Content-Type": "application/json" },
+        body: JSON.stringify({ inodes: [inode] }),
+      });
+      return r.status;
+    },
+    { jwt, inode: folder.inode }
+  );
+  expect(status).toBe(200);
+  await expect
+    .poll(() => fs.existsSync(path.join(SPACES, F_SRC, "leaf.txt")), { timeout: 90_000 })
+    .toBe(true);
+
+  fs.renameSync(path.join(ARCHIVES, F_SRC), path.join(ARCHIVES, F_DST, F_SRC));
+
+  await expect
+    .poll(async () => (await listPath(page, jwt, F_DST))?.some((i) => i.name === F_SRC), {
+      timeout: 90_000,
+    })
+    .toBe(true);
+
+  // No phantom resurrected at the old path, in either root.
+  await expect
+    .poll(() => fs.existsSync(path.join(ARCHIVES, F_SRC)), { timeout: 30_000 })
+    .toBe(false);
+  expect(fs.existsSync(path.join(SPACES, F_SRC))).toBe(false);
+
+  // The subtree followed, keeping its identity and its selection — a
+  // re-registration would leave a row here too, but with a new inode and
+  // selected=false, which is exactly the failure.
+  const movedDir = (await listPath(page, jwt, F_DST))!.find((i) => i.name === F_SRC)!;
+  expect(movedDir.inode).toBe(folder.inode);
+
+  const movedLeaf = (await listPath(page, jwt, `${F_DST}/${F_SRC}`))!.find(
+    (i) => i.name === "leaf.txt"
+  )!;
+  expect(movedLeaf.inode).toBe(leafBefore.inode);
+  expect(movedLeaf.selected).toBe(true);
+
+  await expect
+    .poll(() => fs.existsSync(path.join(SPACES, F_DST, F_SRC, "leaf.txt")), {
+      timeout: 90_000,
+    })
+    .toBe(true);
+});
