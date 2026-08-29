@@ -95,14 +95,16 @@ test("renaming a synced file keeps its checkbox, with no reload", async ({
 
   // Rename with the app's own control — no reload from here on.
   await row.locator(".name").click();
-  await page.locator('[aria-label="Rename"]').click();
+  // Two Rename buttons exist (toolbar and #listing) and only one is visible,
+  // so an unscoped locator is a strict-mode violation rather than a click.
+  await page.locator('[aria-label="Rename"]:visible').first().click();
   const field = page
     .locator('.card.floating input, [role="dialog"] input')
     .first();
   await expect(field).toBeVisible({ timeout: 10_000 });
   await field.fill(DST);
   await page
-    .locator(".card-action button")
+    .locator(".card-action button:visible")
     .filter({ hasText: /rename|ok|confirm/i })
     .first()
     .click();
