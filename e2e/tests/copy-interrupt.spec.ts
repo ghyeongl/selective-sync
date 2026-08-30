@@ -20,6 +20,21 @@ import path from "path";
 // step: pi3 copies at ~5.5 MB/s, so this figure decides whether the poll
 // windows below are reachable at all.
 const GIANT_BYTES = 256 * 1024 * 1024;
+// Convergence budgets in this file are 420s, not the 120s/180s they started at.
+//
+// Not padding — measured. Passing runs of "immediate mtime touch" took 2.3m,
+// 2.7m and 3.5m against a 180s window, a margin of about 1.1-1.3x, so the test
+// only passed when nothing else competed for the disk. It failed on four runs
+// across three different tests in this group for that reason alone.
+//
+// The budget has to cover what these tests actually do: abort a copy partway
+// and then copy the whole thing again. One 256MiB copy is ~48s at the ~5.5MB/s
+// this hardware sustains, so an abort-plus-recopy with contention needs several
+// multiples of that, not one.
+//
+// Raising it costs nothing on a green run — pollUntil returns as soon as the
+// condition holds. It only lengthens the report of a genuine failure.
+
 
 // Recreate giant-file.dat at GIANT_BYTES if an earlier test unlinked it.
 //
@@ -182,7 +197,7 @@ test.describe.serial("1GB Copy Interruption", () => {
         const g = items.find((i: any) => i.name === "giant-file.dat");
         return g != null && g.status === "archived";
       },
-      120_000
+      420_000
     );
 
     expect(fs.existsSync(path.join(SPACES, "giant-file.dat"))).toBe(false);
@@ -221,7 +236,7 @@ test.describe.serial("1GB Copy Interruption", () => {
         // Either gone (cleaned up) or synced (recovered)
         return g == null || g.status === "synced" || g.status === "archived";
       },
-      120_000
+      420_000
     );
 
     expect(noTmpFiles()).toBe(true);
@@ -272,7 +287,7 @@ test.describe.serial("1GB Copy Interruption", () => {
         const g = items.find((i: any) => i.name === "giant-file.dat");
         return g != null && g.status === "synced";
       },
-      180_000
+      420_000
     );
 
     const spacesPath = path.join(SPACES, "giant-file.dat");
@@ -320,7 +335,7 @@ test.describe.serial("1GB Copy Interruption", () => {
         const g = items.find((i: any) => i.name === "giant-file.dat");
         return g != null && g.status === "synced";
       },
-      180_000
+      420_000
     );
 
     expect(fs.existsSync(path.join(SPACES, "giant-file.dat"))).toBe(true);
@@ -367,7 +382,7 @@ test.describe.serial("Operations during 1GB copy", () => {
         );
         return g != null && g.status === "synced" && syncedSmalls.length >= 5;
       },
-      180_000
+      420_000
     );
 
     // Verify disk
@@ -422,7 +437,7 @@ test.describe.serial("Operations during 1GB copy", () => {
           s.status === "archived"
         );
       },
-      180_000
+      420_000
     );
 
     expect(fs.existsSync(path.join(SPACES, "giant-file.dat"))).toBe(true);
@@ -461,7 +476,7 @@ test.describe.serial("Operations during 1GB copy", () => {
           g != null && g.status === "synced" && dc != null && dc.status === "archived"
         );
       },
-      180_000
+      420_000
     );
 
     expect(noTmpFiles()).toBe(true);
@@ -506,7 +521,7 @@ test.describe.serial("Operations during 1GB copy", () => {
         const td = items.find((i: any) => i.name === "to-delete.txt");
         return g != null && g.status === "synced" && td == null;
       },
-      180_000
+      420_000
     );
 
     expect(noTmpFiles()).toBe(true);
@@ -546,7 +561,7 @@ test.describe.serial("Operations during 1GB copy", () => {
           sp.status === "synced"
         );
       },
-      180_000
+      420_000
     );
 
     // Both should exist in Archives (recovered) and Spaces
@@ -590,7 +605,7 @@ test.describe.serial("Operations during 1GB copy", () => {
         const g = items.find((i: any) => i.name === "giant-file.dat");
         return g != null && g.status === "synced";
       },
-      180_000
+      420_000
     );
 
     // Delete the Spaces copy — P4 sees sel=1, S_disk=0, S_db=1 and reads it as
@@ -606,7 +621,7 @@ test.describe.serial("Operations during 1GB copy", () => {
         const g = i.find((e: any) => e.name === "giant-file.dat");
         return g != null && g.status === "archived";
       },
-      180_000
+      420_000
     );
     const giantAfter = items.find((e: any) => e.name === "giant-file.dat");
     expect(giantAfter.selected, "external deletion clears selected").toBe(false);
@@ -663,7 +678,7 @@ test.describe.serial("Operations during 1GB copy", () => {
         );
         return g != null && g.status === "synced" && syncedSmalls.length >= 10;
       },
-      180_000
+      420_000
     );
 
     expect(noTmpFiles()).toBe(true);
@@ -716,7 +731,7 @@ test.describe.serial("Operations during 1GB copy", () => {
           td.childStableCount === td.childTotalCount
         );
       },
-      180_000
+      420_000
     );
 
     // Verify children
