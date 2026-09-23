@@ -33,7 +33,13 @@ export default defineConfig({
   use: {
     baseURL: EXTERNAL_URL ?? `http://127.0.0.1:${PORT}`,
     headless: true,
-    actionTimeout: 10_000,
+    // D10 (runs 35821690515/35828223198): the pi3 CI host was swapping
+    // (1.04GB swap in use on a 1.67GB box) with a 3.4/5.0/6.1 load average
+    // while the daemon sat idle — the browser was starved, not blocked by
+    // app JS. A dblclick stalled 8-10s past the 10s action timeout on
+    // otherwise-passing tests. Give the Pi container path real headroom;
+    // the local Mac path (no EXTERNAL_URL) keeps the original budget.
+    actionTimeout: EXTERNAL_URL ? 30_000 : 10_000,
     // D8: a failure here had no trace to inspect — only the text summary
     // and whatever the caller's own container-log step happened to catch.
     // retain-on-failure keeps trace.zip (and its screenshots/DOM snapshots)
