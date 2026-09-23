@@ -34,6 +34,11 @@ export default defineConfig({
     baseURL: EXTERNAL_URL ?? `http://127.0.0.1:${PORT}`,
     headless: true,
     actionTimeout: 10_000,
+    // D8: a failure here had no trace to inspect — only the text summary
+    // and whatever the caller's own container-log step happened to catch.
+    // retain-on-failure keeps trace.zip (and its screenshots/DOM snapshots)
+    // in test-results for a failed test only, discarded on a pass.
+    trace: "retain-on-failure",
   },
   ...(EXTERNAL_URL ? {} : { webServer: {
     command: [
