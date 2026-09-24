@@ -300,7 +300,7 @@ test.describe.serial("Spaces direct manipulation", () => {
     const small1 = data.items.find((e: any) => e.name === "small-1.txt");
     expect(small1).toBeTruthy();
 
-    expect(await apiSelect(page, jwt, [small1.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [small1.id])).toBe(202);
 
     // Wait for sync
     await pollUntil(
@@ -346,7 +346,7 @@ test.describe.serial("Spaces direct manipulation", () => {
     // Select small-2 to sync
     const data = await fetchEntries(page, jwt);
     const small2 = data.items.find((e: any) => e.name === "small-2.txt");
-    expect(await apiSelect(page, jwt, [small2.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [small2.id])).toBe(202);
     await pollUntil(
       page,
       jwt,
@@ -395,7 +395,7 @@ test.describe.serial("Archives modification of synced files", () => {
     // Select small-3 to sync
     const data = await fetchEntries(page, jwt);
     const small3 = data.items.find((e: any) => e.name === "small-3.txt");
-    expect(await apiSelect(page, jwt, [small3.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [small3.id])).toBe(202);
     await pollUntil(
       page,
       jwt,
@@ -498,7 +498,7 @@ test.describe.serial("Archives modification of synced files", () => {
       15_000
     );
     const entry = items.find((i: any) => i.name === "will-delete.txt");
-    expect(await apiSelect(page, jwt, [entry.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [entry.id])).toBe(202);
 
     await pollUntil(
       page,

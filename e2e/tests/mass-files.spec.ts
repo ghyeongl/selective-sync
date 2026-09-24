@@ -208,7 +208,7 @@ test.describe.serial("Mass file operations", () => {
 
     // Select the folder (recursively selects all children)
     const start = Date.now();
-    expect(await apiSelect(page, jwt, [massDir.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [massDir.id])).toBe(202);
 
     // Wait for all children to be synced
     let syncedCount = 0;
@@ -256,24 +256,24 @@ test.describe.serial("Mass file operations", () => {
 
     if (!allSynced) {
       // Wait for sync to complete
-      expect(await apiSelect(page, jwt, [massDir.id])).toBe(200);
+      expect(await apiSelect(page, jwt, [massDir.id])).toBe(202);
       await page.waitForTimeout(10_000);
     }
 
     // Now deselect → triggers mass removal from Spaces
     const start = Date.now();
-    expect(await apiDeselect(page, jwt, [massDir.id])).toBe(200);
+    expect(await apiDeselect(page, jwt, [massDir.id])).toBe(202);
 
     // IMMEDIATELY re-select (hijack) — worker is busy removing files.
     // This tests queue dedup and hasQueued() abort during mass operations.
     // Retry if SQLite is busy from the mass deselect still processing.
     await page.waitForTimeout(500); // brief pause to let worker start
     let selectStatus = await apiSelect(page, jwt, [massDir.id]);
-    for (let retry = 0; retry < 5 && selectStatus !== 200; retry++) {
+    for (let retry = 0; retry < 5 && selectStatus !== 202; retry++) {
       await page.waitForTimeout(1000);
       selectStatus = await apiSelect(page, jwt, [massDir.id]);
     }
-    expect(selectStatus).toBe(200);
+    expect(selectStatus).toBe(202);
 
     // Final state: selected=true → all should converge to synced
     let syncedCount = 0;
@@ -304,7 +304,7 @@ test.describe.serial("Mass file operations", () => {
     const massDir = data.items.find((e: any) => e.name === "mass-test");
 
     // First deselect all to start clean
-    expect(await apiDeselect(page, jwt, [massDir.id])).toBe(200);
+    expect(await apiDeselect(page, jwt, [massDir.id])).toBe(202);
 
     // Wait for all to become archived
     const start = Date.now();
@@ -320,7 +320,7 @@ test.describe.serial("Mass file operations", () => {
     }
 
     // Select all
-    expect(await apiSelect(page, jwt, [massDir.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [massDir.id])).toBe(202);
 
     // Wait briefly for processing to start, then deselect first half
     await page.waitForTimeout(1000);
@@ -334,11 +334,11 @@ test.describe.serial("Mass file operations", () => {
 
     // Deselect half — batch API (retry if SQLite is busy)
     let deselectStatus = await apiDeselect(page, jwt, firstHalf);
-    for (let retry = 0; retry < 5 && deselectStatus !== 200; retry++) {
+    for (let retry = 0; retry < 5 && deselectStatus !== 202; retry++) {
       await page.waitForTimeout(1000);
       deselectStatus = await apiDeselect(page, jwt, firstHalf);
     }
-    expect(deselectStatus).toBe(200);
+    expect(deselectStatus).toBe(202);
 
     // Wait for convergence
     const convStart = Date.now();
@@ -392,7 +392,7 @@ test.describe.serial("Mass file operations", () => {
     const massDir = data.items.find((e: any) => e.name === "mass-test");
 
     // Start with all deselected
-    expect(await apiDeselect(page, jwt, [massDir.id])).toBe(200);
+    expect(await apiDeselect(page, jwt, [massDir.id])).toBe(202);
     await page.waitForTimeout(5000);
 
     // Rapid folder toggles — stress the queue dedup
@@ -401,7 +401,7 @@ test.describe.serial("Mass file operations", () => {
       await apiDeselect(page, jwt, [massDir.id]);
     }
     // Final: select (odd number of selects)
-    expect(await apiSelect(page, jwt, [massDir.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [massDir.id])).toBe(202);
 
     // All should eventually sync (final state: selected)
     const start = Date.now();
@@ -439,7 +439,7 @@ test.describe.serial("Mass file operations", () => {
     if (
       children.items.some((c: any) => c.status !== "synced")
     ) {
-      expect(await apiSelect(page, jwt, [massDir.id])).toBe(200);
+      expect(await apiSelect(page, jwt, [massDir.id])).toBe(202);
       await page.waitForTimeout(30_000);
     }
 
@@ -495,7 +495,7 @@ test.describe.serial("Mass file operations", () => {
     const massDir = data.items.find((e: any) => e.name === "mass-test");
 
     // Ensure clean state: all archived
-    expect(await apiDeselect(page, jwt, [massDir.id])).toBe(200);
+    expect(await apiDeselect(page, jwt, [massDir.id])).toBe(202);
     const waitStart = Date.now();
     while (Date.now() - waitStart < 300_000) {
       const ch = await fetchEntries(page, jwt, { parentIno: massDir.id });
@@ -507,7 +507,7 @@ test.describe.serial("Mass file operations", () => {
     }
 
     // Select → worker starts mass copy
-    expect(await apiSelect(page, jwt, [massDir.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [massDir.id])).toBe(202);
 
     // 3x rapid deselect-reselect while worker is processing
     for (let i = 0; i < 3; i++) {

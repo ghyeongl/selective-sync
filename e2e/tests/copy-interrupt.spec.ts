@@ -180,14 +180,14 @@ test.describe.serial("1GB Copy Interruption", () => {
     const giant = data.items.find((e: any) => e.name === "giant-file.dat");
 
     // Select — queues path for SafeCopy
-    expect(await apiSelect(page, jwt, [giant.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [giant.id])).toBe(202);
 
     // Deselect IMMEDIATELY — no waiting. On fast SSD the copy might
     // already be done, or it might still be in progress.
     // Either way: deselect pushes the path to queue.
     //   Case A (copy in progress): hasQueued() → true → SafeCopy aborts → re-eval with sel=0
     //   Case B (copy done): re-eval sees sel=0 → P4 removes from Spaces
-    expect(await apiDeselect(page, jwt, [giant.id])).toBe(200);
+    expect(await apiDeselect(page, jwt, [giant.id])).toBe(202);
 
     // Final state: archived (sel=0)
     await pollUntil(
@@ -215,7 +215,7 @@ test.describe.serial("1GB Copy Interruption", () => {
     const giant = data.items.find((e: any) => e.name === "giant-file.dat");
 
     // Select — queues SafeCopy
-    expect(await apiSelect(page, jwt, [giant.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [giant.id])).toBe(202);
 
     // Delete Archives source IMMEDIATELY
     // On Unix, open file handles survive unlink — SafeCopy may complete.
@@ -270,7 +270,7 @@ test.describe.serial("1GB Copy Interruption", () => {
     const giant = data.items.find((e: any) => e.name === "giant-file.dat");
 
     // Select — starts SafeCopy
-    expect(await apiSelect(page, jwt, [giant.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [giant.id])).toBe(202);
 
     // Touch mtime IMMEDIATELY — no waiting
     //   If copy not started yet: watcher queues → hasQueued() aborts copy → re-eval
@@ -318,7 +318,7 @@ test.describe.serial("1GB Copy Interruption", () => {
     const giant = data.items.find((e: any) => e.name === "giant-file.dat");
 
     // Select — starts copy
-    expect(await apiSelect(page, jwt, [giant.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [giant.id])).toBe(202);
 
     // Rapid toggle 5 times — NO waiting between calls
     // Each push re-queues, causing hasQueued() abort if copy is in progress
@@ -368,7 +368,7 @@ test.describe.serial("Operations during 1GB copy", () => {
 
     // Select giant + 5 smalls in one batch — worker processes sequentially
     const allIds = [giant.id, ...smalls.map((s: any) => s.id)];
-    expect(await apiSelect(page, jwt, allIds)).toBe(200);
+    expect(await apiSelect(page, jwt, allIds)).toBe(202);
 
     // All 6 should eventually reach synced
     await pollUntil(
@@ -406,7 +406,7 @@ test.describe.serial("Operations during 1GB copy", () => {
     const small1 = data.items.find((e: any) => e.name === "small-1.txt");
 
     // Pre-sync small-1
-    expect(await apiSelect(page, jwt, [small1.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [small1.id])).toBe(202);
     await pollUntil(
       page,
       jwt,
@@ -418,10 +418,10 @@ test.describe.serial("Operations during 1GB copy", () => {
     );
 
     // Start 1GB copy
-    expect(await apiSelect(page, jwt, [giant.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [giant.id])).toBe(202);
 
     // Immediately deselect small-1 while worker is busy with giant
-    expect(await apiDeselect(page, jwt, [small1.id])).toBe(200);
+    expect(await apiDeselect(page, jwt, [small1.id])).toBe(202);
 
     // Both should converge: giant=synced, small-1=archived
     await pollUntil(
@@ -457,7 +457,7 @@ test.describe.serial("Operations during 1GB copy", () => {
     const giant = data.items.find((e: any) => e.name === "giant-file.dat");
 
     // Start 1GB copy
-    expect(await apiSelect(page, jwt, [giant.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [giant.id])).toBe(202);
 
     // Create a new file in Archives while worker is busy
     fs.writeFileSync(
@@ -507,7 +507,7 @@ test.describe.serial("Operations during 1GB copy", () => {
     const giant = data.items.find((e: any) => e.name === "giant-file.dat");
 
     // Start 1GB copy
-    expect(await apiSelect(page, jwt, [giant.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [giant.id])).toBe(202);
 
     // Delete a different file while worker is busy copying giant
     fs.unlinkSync(path.join(ARCHIVES, "to-delete.txt"));
@@ -539,7 +539,7 @@ test.describe.serial("Operations during 1GB copy", () => {
     const giant = data.items.find((e: any) => e.name === "giant-file.dat");
 
     // Start 1GB copy
-    expect(await apiSelect(page, jwt, [giant.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [giant.id])).toBe(202);
 
     // Simulate Spoke creating a file in Spaces while worker is busy
     fs.writeFileSync(
@@ -597,7 +597,7 @@ test.describe.serial("Operations during 1GB copy", () => {
     const giant = data.items.find((e: any) => e.name === "giant-file.dat");
 
     // Sync the giant file first
-    expect(await apiSelect(page, jwt, [giant.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [giant.id])).toBe(202);
     await pollUntil(
       page,
       jwt,
@@ -643,7 +643,7 @@ test.describe.serial("Operations during 1GB copy", () => {
       .slice(0, 10);
 
     // Start 1GB copy
-    expect(await apiSelect(page, jwt, [giant.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [giant.id])).toBe(202);
 
     // Fire 10 concurrent select calls for different files while worker is busy
     const results = await page.evaluate(
@@ -661,7 +661,7 @@ test.describe.serial("Operations during 1GB copy", () => {
     );
 
     // Some may fail due to SQLite contention — retry failed
-    const failed = smalls.filter((_: any, i: number) => results[i] !== 200);
+    const failed = smalls.filter((_: any, i: number) => results[i] !== 202);
     for (const s of failed) {
       await apiSelect(page, jwt, [s.id]);
     }
@@ -702,10 +702,10 @@ test.describe.serial("Operations during 1GB copy", () => {
     expect(testDir).toBeTruthy();
 
     // Start 1GB copy
-    expect(await apiSelect(page, jwt, [giant.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [giant.id])).toBe(202);
 
     // Select folder while worker is busy copying giant
-    expect(await apiSelect(page, jwt, [testDir.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [testDir.id])).toBe(202);
 
     // Both should converge: giant=synced, test-dir + all children=synced.
     //
