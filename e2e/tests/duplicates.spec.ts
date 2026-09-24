@@ -101,7 +101,9 @@ test("reports identical sibling subtrees and skips byte-different ones", async (
   expect(group.names).not.toContain("different");
   expect(group.fileCount).toBe(2);
 
-  // names[i] must identify inodes[i] — a caller trims by inode.
-  expect(group.inodes).toHaveLength(group.names.length);
-  expect(new Set(group.inodes).size).toBe(group.inodes.length);
+  // E1 follow-up: the report's consumer trims by identity, so DupGroup grows
+  // an Ids field (same order as Names) alongside the existing Inodes hint.
+  // names[i] must identify ids[i] — a caller trims by id.
+  expect(group.ids).toHaveLength(group.names.length);
+  expect(new Set(group.ids).size).toBe(group.ids.length);
 });

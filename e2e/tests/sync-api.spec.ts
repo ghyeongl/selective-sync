@@ -2,14 +2,16 @@
  * Coverage for the sync endpoints the suite never touched.
  *
  * Before this, e2e exercised only /entries, /select, /deselect and
- * /duplicates. /entry/{inode}, /stats, /dirsize and /events had ZERO coverage,
- * so a regression in any of them would have reached pi1 unnoticed.
+ * /duplicates. /entry/{id}, /stats and /events had ZERO coverage, so a
+ * regression in any of them would have reached pi1 unnoticed.
  *
  * Behaviours here were established by probing the running staging container
- * first, not assumed: a bogus inode answers 404, /dirsize without its parameter
- * answers 400, and /stats reports Bavail rather than total free — which is why
- * it correctly showed diskFree: 0 on a runner whose disk was full for
- * unprivileged writes.
+ * first, not assumed: a bogus id answers 404, and /stats reports Bavail
+ * rather than total free — which is why it correctly showed diskFree: 0 on a
+ * runner whose disk was full for unprivileged writes.
+ *
+ * E1: /dirsize is removed in S5 (dir sizes now come from dir_total_size /
+ * dir_synced_size on the entry), so its coverage is deleted, not migrated.
  */
 import { test, expect, type Page } from "@playwright/test";
 import fs from "fs";
@@ -71,7 +73,7 @@ test.describe("sync API endpoints", () => {
     expect(typeof stats.statusCounts).toBe("object");
   });
 
-  test("/entry/{inode} returns the entry, and 404s an unknown one", async ({
+  test("/entry/{id} returns the entry, and 404s an unknown one", async ({
     page,
   }) => {
     await page.goto("/");
@@ -81,53 +83,24 @@ test.describe("sync API endpoints", () => {
     const listed = await get(page, jwt, "/api/sync/entries?path=");
     expect(listed.status).toBe(200);
     const items = JSON.parse(listed.body).items as Array<{
-      inode: number;
+      id: number;
       name: string;
     }>;
     expect(items.length).toBeGreaterThan(0);
 
     const one = items[0];
-    const found = await get(page, jwt, `/api/sync/entry/${one.inode}`);
+    const found = await get(page, jwt, `/api/sync/entry/${one.id}`);
     expect(found.status).toBe(200);
     const entry = JSON.parse(found.body);
-    expect(entry.inode).toBe(one.inode);
+    expect(entry.id).toBe(one.id);
     expect(entry.name).toBe(one.name);
 
-    // An inode no catalog row holds must be a clean 404, not an empty 200 —
+    // An id no catalog row holds must be a clean 404, not an empty 200 —
     // "not found" and "here is nothing" are different answers, and the entries
-    // endpoint once conflated exactly that (inode 0 IS the root).
+    // endpoint once conflated exactly that (inode 0 IS the root, back when
+    // inode was still the identity).
     const missing = await get(page, jwt, "/api/sync/entry/999999999");
     expect(missing.status).toBe(404);
-  });
-
-  test("/dirsize streams sizes, and rejects a call with no inodes", async ({
-    page,
-  }) => {
-    await page.goto("/");
-    await page.waitForTimeout(2000);
-    const jwt = await apiLogin(page);
-
-    const bad = await get(page, jwt, "/api/sync/dirsize");
-    expect(bad.status).toBe(400);
-
-    const notANumber = await get(page, jwt, "/api/sync/dirsize?inodes=abc");
-    expect(notANumber.status).toBe(400);
-
-    // A real directory streams a size event back.
-    const listed = await get(page, jwt, "/api/sync/entries?path=");
-    const dirs = (JSON.parse(listed.body).items as Array<{
-      inode: number;
-      type: string;
-    }>).filter((i) => i.type === "dir");
-    test.skip(dirs.length === 0, "no directory in the fixture to size");
-
-    const streamed = await get(
-      page,
-      jwt,
-      `/api/sync/dirsize?inodes=${dirs[0].inode}`
-    );
-    expect(streamed.status).toBe(200);
-    expect(streamed.body).toContain("data:");
   });
 
   test("/events pushes a status change to a connected listener", async ({
