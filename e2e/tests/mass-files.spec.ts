@@ -73,31 +73,31 @@ async function fetchEntries(
   );
 }
 
-async function apiSelect(page: Page, jwt: string, inodes: number[]) {
+async function apiSelect(page: Page, jwt: string, ids: number[]) {
   return page.evaluate(
-    async ({ jwt, inodes }) => {
+    async ({ jwt, ids }) => {
       const resp = await fetch("/api/sync/select", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Auth": jwt },
-        body: JSON.stringify({ inodes }),
+        body: JSON.stringify({ ids }),
       });
       return resp.status;
     },
-    { jwt, inodes }
+    { jwt, ids }
   );
 }
 
-async function apiDeselect(page: Page, jwt: string, inodes: number[]) {
+async function apiDeselect(page: Page, jwt: string, ids: number[]) {
   return page.evaluate(
-    async ({ jwt, inodes }) => {
+    async ({ jwt, ids }) => {
       const resp = await fetch("/api/sync/deselect", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Auth": jwt },
-        body: JSON.stringify({ inodes }),
+        body: JSON.stringify({ ids }),
       });
       return resp.status;
     },
-    { jwt, inodes }
+    { jwt, ids }
   );
 }
 
@@ -181,7 +181,7 @@ test.describe.serial("Mass file operations", () => {
     let childCount = 0;
     while (Date.now() - childStart < 600_000) {
       const children = await fetchEntries(page, jwt, {
-        parentIno: massDir.inode,
+        parentIno: massDir.id,
       });
       childCount = children.items.length;
       if (childCount >= FILE_COUNT) break;
@@ -208,13 +208,13 @@ test.describe.serial("Mass file operations", () => {
 
     // Select the folder (recursively selects all children)
     const start = Date.now();
-    expect(await apiSelect(page, jwt, [massDir.inode])).toBe(200);
+    expect(await apiSelect(page, jwt, [massDir.id])).toBe(200);
 
     // Wait for all children to be synced
     let syncedCount = 0;
     while (Date.now() - start < 600_000) {
       const children = await fetchEntries(page, jwt, {
-        parentIno: massDir.inode,
+        parentIno: massDir.id,
       });
       syncedCount = children.items.filter(
         (c: any) => c.status === "synced"
@@ -248,7 +248,7 @@ test.describe.serial("Mass file operations", () => {
 
     // Ensure all are synced from previous test
     const children = await fetchEntries(page, jwt, {
-      parentIno: massDir.inode,
+      parentIno: massDir.id,
     });
     const allSynced = children.items.every(
       (c: any) => c.status === "synced"
@@ -256,22 +256,22 @@ test.describe.serial("Mass file operations", () => {
 
     if (!allSynced) {
       // Wait for sync to complete
-      expect(await apiSelect(page, jwt, [massDir.inode])).toBe(200);
+      expect(await apiSelect(page, jwt, [massDir.id])).toBe(200);
       await page.waitForTimeout(10_000);
     }
 
     // Now deselect → triggers mass removal from Spaces
     const start = Date.now();
-    expect(await apiDeselect(page, jwt, [massDir.inode])).toBe(200);
+    expect(await apiDeselect(page, jwt, [massDir.id])).toBe(200);
 
     // IMMEDIATELY re-select (hijack) — worker is busy removing files.
     // This tests queue dedup and hasQueued() abort during mass operations.
     // Retry if SQLite is busy from the mass deselect still processing.
     await page.waitForTimeout(500); // brief pause to let worker start
-    let selectStatus = await apiSelect(page, jwt, [massDir.inode]);
+    let selectStatus = await apiSelect(page, jwt, [massDir.id]);
     for (let retry = 0; retry < 5 && selectStatus !== 200; retry++) {
       await page.waitForTimeout(1000);
-      selectStatus = await apiSelect(page, jwt, [massDir.inode]);
+      selectStatus = await apiSelect(page, jwt, [massDir.id]);
     }
     expect(selectStatus).toBe(200);
 
@@ -279,7 +279,7 @@ test.describe.serial("Mass file operations", () => {
     let syncedCount = 0;
     while (Date.now() - start < 600_000) {
       const ch = await fetchEntries(page, jwt, {
-        parentIno: massDir.inode,
+        parentIno: massDir.id,
       });
       syncedCount = ch.items.filter(
         (c: any) => c.status === "synced"
@@ -304,13 +304,13 @@ test.describe.serial("Mass file operations", () => {
     const massDir = data.items.find((e: any) => e.name === "mass-test");
 
     // First deselect all to start clean
-    expect(await apiDeselect(page, jwt, [massDir.inode])).toBe(200);
+    expect(await apiDeselect(page, jwt, [massDir.id])).toBe(200);
 
     // Wait for all to become archived
     const start = Date.now();
     while (Date.now() - start < 300_000) {
       const ch = await fetchEntries(page, jwt, {
-        parentIno: massDir.inode,
+        parentIno: massDir.id,
       });
       const archivedCount = ch.items.filter(
         (c: any) => c.status === "archived"
@@ -320,17 +320,17 @@ test.describe.serial("Mass file operations", () => {
     }
 
     // Select all
-    expect(await apiSelect(page, jwt, [massDir.inode])).toBe(200);
+    expect(await apiSelect(page, jwt, [massDir.id])).toBe(200);
 
     // Wait briefly for processing to start, then deselect first half
     await page.waitForTimeout(1000);
 
     const children = await fetchEntries(page, jwt, {
-      parentIno: massDir.inode,
+      parentIno: massDir.id,
     });
     const firstHalf = children.items
       .slice(0, Math.floor(children.items.length / 2))
-      .map((c: any) => c.inode);
+      .map((c: any) => c.id);
 
     // Deselect half — batch API (retry if SQLite is busy)
     let deselectStatus = await apiDeselect(page, jwt, firstHalf);
@@ -344,7 +344,7 @@ test.describe.serial("Mass file operations", () => {
     const convStart = Date.now();
     while (Date.now() - convStart < 600_000) {
       const ch = await fetchEntries(page, jwt, {
-        parentIno: massDir.inode,
+        parentIno: massDir.id,
       });
       const synced = ch.items.filter(
         (c: any) => c.status === "synced"
@@ -366,7 +366,7 @@ test.describe.serial("Mass file operations", () => {
     // still transitioning within the timeout. This is a stress test; what
     // matters is that the vast majority converge correctly.
     const finalChildren = await fetchEntries(page, jwt, {
-      parentIno: massDir.inode,
+      parentIno: massDir.id,
     });
     const synced = finalChildren.items.filter(
       (c: any) => c.status === "synced"
@@ -392,23 +392,23 @@ test.describe.serial("Mass file operations", () => {
     const massDir = data.items.find((e: any) => e.name === "mass-test");
 
     // Start with all deselected
-    expect(await apiDeselect(page, jwt, [massDir.inode])).toBe(200);
+    expect(await apiDeselect(page, jwt, [massDir.id])).toBe(200);
     await page.waitForTimeout(5000);
 
     // Rapid folder toggles — stress the queue dedup
     for (let i = 0; i < 10; i++) {
-      await apiSelect(page, jwt, [massDir.inode]);
-      await apiDeselect(page, jwt, [massDir.inode]);
+      await apiSelect(page, jwt, [massDir.id]);
+      await apiDeselect(page, jwt, [massDir.id]);
     }
     // Final: select (odd number of selects)
-    expect(await apiSelect(page, jwt, [massDir.inode])).toBe(200);
+    expect(await apiSelect(page, jwt, [massDir.id])).toBe(200);
 
     // All should eventually sync (final state: selected)
     const start = Date.now();
     let syncedCount = 0;
     while (Date.now() - start < 600_000) {
       const ch = await fetchEntries(page, jwt, {
-        parentIno: massDir.inode,
+        parentIno: massDir.id,
       });
       syncedCount = ch.items.filter(
         (c: any) => c.status === "synced"
@@ -434,12 +434,12 @@ test.describe.serial("Mass file operations", () => {
 
     // Ensure all synced
     const children = await fetchEntries(page, jwt, {
-      parentIno: massDir.inode,
+      parentIno: massDir.id,
     });
     if (
       children.items.some((c: any) => c.status !== "synced")
     ) {
-      expect(await apiSelect(page, jwt, [massDir.inode])).toBe(200);
+      expect(await apiSelect(page, jwt, [massDir.id])).toBe(200);
       await page.waitForTimeout(30_000);
     }
 
@@ -459,7 +459,7 @@ test.describe.serial("Mass file operations", () => {
     const start = Date.now();
     while (Date.now() - start < 300_000) {
       const ch = await fetchEntries(page, jwt, {
-        parentIno: massDir.inode,
+        parentIno: massDir.id,
       });
       const allSettled = ch.items.every(
         (c: any) =>
@@ -476,12 +476,12 @@ test.describe.serial("Mass file operations", () => {
 
     // Final state should be consistent
     const final = await fetchEntries(page, jwt, {
-      parentIno: massDir.inode,
+      parentIno: massDir.id,
     });
     expect(final.items.length).toBeGreaterThan(0);
 
     // Cleanup: deselect all
-    await apiDeselect(page, jwt, [massDir.inode]);
+    await apiDeselect(page, jwt, [massDir.id]);
     await page.waitForTimeout(10_000);
   });
 
@@ -495,10 +495,10 @@ test.describe.serial("Mass file operations", () => {
     const massDir = data.items.find((e: any) => e.name === "mass-test");
 
     // Ensure clean state: all archived
-    expect(await apiDeselect(page, jwt, [massDir.inode])).toBe(200);
+    expect(await apiDeselect(page, jwt, [massDir.id])).toBe(200);
     const waitStart = Date.now();
     while (Date.now() - waitStart < 300_000) {
-      const ch = await fetchEntries(page, jwt, { parentIno: massDir.inode });
+      const ch = await fetchEntries(page, jwt, { parentIno: massDir.id });
       const archivedCount = ch.items.filter(
         (c: any) => c.status === "archived"
       ).length;
@@ -507,19 +507,19 @@ test.describe.serial("Mass file operations", () => {
     }
 
     // Select → worker starts mass copy
-    expect(await apiSelect(page, jwt, [massDir.inode])).toBe(200);
+    expect(await apiSelect(page, jwt, [massDir.id])).toBe(200);
 
     // 3x rapid deselect-reselect while worker is processing
     for (let i = 0; i < 3; i++) {
-      await apiDeselect(page, jwt, [massDir.inode]);
-      await apiSelect(page, jwt, [massDir.inode]);
+      await apiDeselect(page, jwt, [massDir.id]);
+      await apiSelect(page, jwt, [massDir.id]);
     }
 
     // Final state: selected=true → all should converge to synced
     const start = Date.now();
     let syncedCount = 0;
     while (Date.now() - start < 600_000) {
-      const ch = await fetchEntries(page, jwt, { parentIno: massDir.inode });
+      const ch = await fetchEntries(page, jwt, { parentIno: massDir.id });
       syncedCount = ch.items.filter(
         (c: any) => c.status === "synced"
       ).length;

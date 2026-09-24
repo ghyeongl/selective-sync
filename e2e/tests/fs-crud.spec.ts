@@ -54,31 +54,31 @@ async function fetchEntries(
   );
 }
 
-async function apiSelect(page: Page, jwt: string, inodes: number[]) {
+async function apiSelect(page: Page, jwt: string, ids: number[]) {
   return page.evaluate(
-    async ({ jwt, inodes }) => {
+    async ({ jwt, ids }) => {
       const resp = await fetch("/api/sync/select", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Auth": jwt },
-        body: JSON.stringify({ inodes }),
+        body: JSON.stringify({ ids }),
       });
       return resp.status;
     },
-    { jwt, inodes }
+    { jwt, ids }
   );
 }
 
-async function apiDeselect(page: Page, jwt: string, inodes: number[]) {
+async function apiDeselect(page: Page, jwt: string, ids: number[]) {
   return page.evaluate(
-    async ({ jwt, inodes }) => {
+    async ({ jwt, ids }) => {
       const resp = await fetch("/api/sync/deselect", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Auth": jwt },
-        body: JSON.stringify({ inodes }),
+        body: JSON.stringify({ ids }),
       });
       return resp.status;
     },
-    { jwt, inodes }
+    { jwt, ids }
   );
 }
 
@@ -226,7 +226,7 @@ test.describe.serial("Archives CRUD → watcher detection", () => {
     const childStart = Date.now();
     while (Date.now() - childStart < 30_000) {
       childData = await fetchEntries(page, jwt, {
-        parentIno: dir.inode,
+        parentIno: dir.id,
       });
       if (childData.items.length >= 2) break;
       await page.waitForTimeout(1000);
@@ -277,7 +277,7 @@ test.describe.serial("Spaces direct manipulation", () => {
     const data = await fetchEntries(page, jwt);
     const entry = data.items.find((e: any) => e.name === "spoke-new.txt");
     if (entry) {
-      await apiDeselect(page, jwt, [entry.inode]);
+      await apiDeselect(page, jwt, [entry.id]);
       await page.waitForTimeout(3000);
     }
     if (fs.existsSync(path.join(ARCHIVES, "spoke-new.txt")))
@@ -300,7 +300,7 @@ test.describe.serial("Spaces direct manipulation", () => {
     const small1 = data.items.find((e: any) => e.name === "small-1.txt");
     expect(small1).toBeTruthy();
 
-    expect(await apiSelect(page, jwt, [small1.inode])).toBe(200);
+    expect(await apiSelect(page, jwt, [small1.id])).toBe(200);
 
     // Wait for sync
     await pollUntil(
@@ -346,7 +346,7 @@ test.describe.serial("Spaces direct manipulation", () => {
     // Select small-2 to sync
     const data = await fetchEntries(page, jwt);
     const small2 = data.items.find((e: any) => e.name === "small-2.txt");
-    expect(await apiSelect(page, jwt, [small2.inode])).toBe(200);
+    expect(await apiSelect(page, jwt, [small2.id])).toBe(200);
     await pollUntil(
       page,
       jwt,
@@ -381,7 +381,7 @@ test.describe.serial("Spaces direct manipulation", () => {
     expect(entry).toBeTruthy();
 
     // Cleanup
-    await apiDeselect(page, jwt, [small2.inode]);
+    await apiDeselect(page, jwt, [small2.id]);
     await page.waitForTimeout(3000);
   });
 });
@@ -395,7 +395,7 @@ test.describe.serial("Archives modification of synced files", () => {
     // Select small-3 to sync
     const data = await fetchEntries(page, jwt);
     const small3 = data.items.find((e: any) => e.name === "small-3.txt");
-    expect(await apiSelect(page, jwt, [small3.inode])).toBe(200);
+    expect(await apiSelect(page, jwt, [small3.id])).toBe(200);
     await pollUntil(
       page,
       jwt,
@@ -433,7 +433,7 @@ test.describe.serial("Archives modification of synced files", () => {
     expect(spacesContent).toBe(newContent);
 
     // Cleanup
-    await apiDeselect(page, jwt, [small3.inode]);
+    await apiDeselect(page, jwt, [small3.id]);
     await page.waitForTimeout(3000);
   });
 
@@ -498,7 +498,7 @@ test.describe.serial("Archives modification of synced files", () => {
       15_000
     );
     const entry = items.find((i: any) => i.name === "will-delete.txt");
-    expect(await apiSelect(page, jwt, [entry.inode])).toBe(200);
+    expect(await apiSelect(page, jwt, [entry.id])).toBe(200);
 
     await pollUntil(
       page,
@@ -538,7 +538,7 @@ test.describe.serial("Archives modification of synced files", () => {
     // Cleanup: deselect
     const data = await fetchEntries(page, jwt);
     const e = data.items.find((i: any) => i.name === "will-delete.txt");
-    if (e) await apiDeselect(page, jwt, [e.inode]);
+    if (e) await apiDeselect(page, jwt, [e.id]);
     await page.waitForTimeout(3000);
     if (fs.existsSync(path.join(ARCHIVES, "will-delete.txt")))
       fs.unlinkSync(path.join(ARCHIVES, "will-delete.txt"));

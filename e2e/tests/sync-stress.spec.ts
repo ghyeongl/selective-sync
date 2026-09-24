@@ -60,32 +60,32 @@ async function fetchEntries(page: Page, jwt: string, opts: { parentPath?: string
 }
 
 /** Call select API. */
-async function apiSelect(page: Page, jwt: string, inodes: number[]) {
+async function apiSelect(page: Page, jwt: string, ids: number[]) {
   return page.evaluate(
-    async ({ jwt, inodes }) => {
+    async ({ jwt, ids }) => {
       const resp = await fetch("/api/sync/select", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Auth": jwt },
-        body: JSON.stringify({ inodes }),
+        body: JSON.stringify({ ids }),
       });
       return resp.status;
     },
-    { jwt, inodes }
+    { jwt, ids }
   );
 }
 
 /** Call deselect API. */
-async function apiDeselect(page: Page, jwt: string, inodes: number[]) {
+async function apiDeselect(page: Page, jwt: string, ids: number[]) {
   return page.evaluate(
-    async ({ jwt, inodes }) => {
+    async ({ jwt, ids }) => {
       const resp = await fetch("/api/sync/deselect", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Auth": jwt },
-        body: JSON.stringify({ inodes }),
+        body: JSON.stringify({ ids }),
       });
       return resp.status;
     },
-    { jwt, inodes }
+    { jwt, ids }
   );
 }
 
@@ -159,7 +159,7 @@ test.describe.serial("Large File Operations", () => {
     const large = data.items.find((e: any) => e.name === "large-file.dat");
     expect(large).toBeTruthy();
 
-    expect(await apiSelect(page, jwt, [large.inode])).toBe(200);
+    expect(await apiSelect(page, jwt, [large.id])).toBe(200);
 
     await waitFileStatus(page, jwt, "large-file.dat", "synced", 60_000);
 
@@ -173,7 +173,7 @@ test.describe.serial("Large File Operations", () => {
     const data = await fetchEntries(page, jwt);
     const large = data.items.find((e: any) => e.name === "large-file.dat");
 
-    expect(await apiDeselect(page, jwt, [large.inode])).toBe(200);
+    expect(await apiDeselect(page, jwt, [large.id])).toBe(200);
 
     await waitFileStatus(page, jwt, "large-file.dat", "archived", 60_000);
     expect(
@@ -189,8 +189,8 @@ test.describe.serial("Large File Operations", () => {
     const large = data.items.find((e: any) => e.name === "large-file.dat");
 
     // Fire both back-to-back — queue deduplicates, worker sees final DB state
-    await apiSelect(page, jwt, [large.inode]);
-    await apiDeselect(page, jwt, [large.inode]);
+    await apiSelect(page, jwt, [large.id]);
+    await apiDeselect(page, jwt, [large.id]);
 
     // Give daemon time to drain queue
     await page.waitForTimeout(3000);
@@ -206,13 +206,13 @@ test.describe.serial("Rapid Multi-Request: Burst Select", () => {
   test("batch select 20 files → all synced", async ({ page }) => {
     const jwt = await loginAndWait(page);
     const data = await fetchEntries(page, jwt);
-    const smallInodes = data.items
+    const smallIds = data.items
       .filter((e: any) => e.name.startsWith("small-"))
-      .map((e: any) => e.inode);
-    expect(smallInodes.length).toBe(20);
+      .map((e: any) => e.id);
+    expect(smallIds.length).toBe(20);
 
-    // Single batch select with all 20 inodes
-    expect(await apiSelect(page, jwt, smallInodes)).toBe(200);
+    // Single batch select with all 20 ids
+    expect(await apiSelect(page, jwt, smallIds)).toBe(200);
 
     // Wait for all 20 to reach "synced"
     await pollUntil(
@@ -238,12 +238,12 @@ test.describe.serial("Rapid Multi-Request: Burst Select", () => {
   test("batch deselect 20 files → all archived", async ({ page }) => {
     const jwt = await loginAndWait(page);
     const data = await fetchEntries(page, jwt);
-    const smallInodes = data.items
+    const smallIds = data.items
       .filter((e: any) => e.name.startsWith("small-"))
-      .map((e: any) => e.inode);
+      .map((e: any) => e.id);
 
     // Single batch deselect
-    expect(await apiDeselect(page, jwt, smallInodes)).toBe(200);
+    expect(await apiDeselect(page, jwt, smallIds)).toBe(200);
 
     await pollUntil(
       page,
@@ -270,33 +270,33 @@ test.describe.serial("Rapid Multi-Request: Burst Select", () => {
   }) => {
     const jwt = await loginAndWait(page);
     const data = await fetchEntries(page, jwt);
-    const smallInodes = data.items
+    const smallIds = data.items
       .filter((e: any) => e.name.startsWith("small-"))
-      .map((e: any) => e.inode);
+      .map((e: any) => e.id);
 
     // Fire 20 concurrent calls — some may 500 due to SQLite locking
     const results = await page.evaluate(
-      async ({ jwt, inodes }) => {
-        const promises = inodes.map((ino: number) =>
+      async ({ jwt, ids }) => {
+        const promises = ids.map((id: number) =>
           fetch("/api/sync/select", {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-Auth": jwt },
-            body: JSON.stringify({ inodes: [ino] }),
+            body: JSON.stringify({ ids: [id] }),
           }).then((r) => r.status)
         );
         return Promise.all(promises);
       },
-      { jwt, inodes: smallInodes }
+      { jwt, ids: smallIds }
     );
 
     const okCount = results.filter((s: number) => s === 200).length;
-    const failedInodes = smallInodes.filter(
+    const failedIds = smallIds.filter(
       (_: any, i: number) => results[i] !== 200
     );
 
     // Retry failed ones sequentially
-    for (const ino of failedInodes) {
-      expect(await apiSelect(page, jwt, [ino])).toBe(200);
+    for (const id of failedIds) {
+      expect(await apiSelect(page, jwt, [id])).toBe(200);
     }
 
     // Eventually all should sync
@@ -331,7 +331,7 @@ test.describe.serial("Rapid Toggle Stress", () => {
 
     // 20 toggles with retry on 500 (SQLite contention with daemon worker)
     const results = await page.evaluate(
-      async ({ jwt, inode }) => {
+      async ({ jwt, id }) => {
         const statuses: number[] = [];
         for (let i = 0; i < 20; i++) {
           const endpoint =
@@ -341,7 +341,7 @@ test.describe.serial("Rapid Toggle Stress", () => {
             const resp = await fetch(endpoint, {
               method: "POST",
               headers: { "Content-Type": "application/json", "X-Auth": jwt },
-              body: JSON.stringify({ inodes: [inode] }),
+              body: JSON.stringify({ ids: [id] }),
             });
             status = resp.status;
             if (status === 200) break;
@@ -351,7 +351,7 @@ test.describe.serial("Rapid Toggle Stress", () => {
         }
         return statuses;
       },
-      { jwt, inode: medium.inode }
+      { jwt, id: medium.id }
     );
 
     expect(results).toEqual(Array(20).fill(200));
@@ -372,7 +372,7 @@ test.describe.serial("Rapid Toggle Stress", () => {
     expect(medium).toBeTruthy();
 
     const results = await page.evaluate(
-      async ({ jwt, inode }) => {
+      async ({ jwt, id }) => {
         const statuses: number[] = [];
         for (let i = 0; i < 21; i++) {
           const endpoint =
@@ -382,7 +382,7 @@ test.describe.serial("Rapid Toggle Stress", () => {
             const resp = await fetch(endpoint, {
               method: "POST",
               headers: { "Content-Type": "application/json", "X-Auth": jwt },
-              body: JSON.stringify({ inodes: [inode] }),
+              body: JSON.stringify({ ids: [id] }),
             });
             status = resp.status;
             if (status === 200) break;
@@ -392,7 +392,7 @@ test.describe.serial("Rapid Toggle Stress", () => {
         }
         return statuses;
       },
-      { jwt, inode: medium.inode }
+      { jwt, id: medium.id }
     );
 
     expect(results).toEqual(Array(21).fill(200));
@@ -417,36 +417,36 @@ test.describe.serial("Concurrent Mixed Operations", () => {
     expect(medium4).toBeTruthy();
 
     // Pre-select medium-4 so we can deselect it
-    expect(await apiSelect(page, jwt, [medium4.inode])).toBe(200);
+    expect(await apiSelect(page, jwt, [medium4.id])).toBe(200);
     await waitFileStatus(page, jwt, "medium-4.dat", "synced", 30_000);
 
     // Concurrently: select medium-3, deselect medium-4
     // One may fail due to SQLite lock — retry the failed one
     const results = await page.evaluate(
-      async ({ jwt, selectIno, deselectIno }) => {
+      async ({ jwt, selectId, deselectId }) => {
         const [selResp, deselResp] = await Promise.all([
           fetch("/api/sync/select", {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-Auth": jwt },
-            body: JSON.stringify({ inodes: [selectIno] }),
+            body: JSON.stringify({ ids: [selectId] }),
           }),
           fetch("/api/sync/deselect", {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-Auth": jwt },
-            body: JSON.stringify({ inodes: [deselectIno] }),
+            body: JSON.stringify({ ids: [deselectId] }),
           }),
         ]);
         return { select: selResp.status, deselect: deselResp.status };
       },
-      { jwt, selectIno: medium3.inode, deselectIno: medium4.inode }
+      { jwt, selectId: medium3.id, deselectId: medium4.id }
     );
 
     // Retry any that failed due to SQLite contention
     if (results.select !== 200) {
-      expect(await apiSelect(page, jwt, [medium3.inode])).toBe(200);
+      expect(await apiSelect(page, jwt, [medium3.id])).toBe(200);
     }
     if (results.deselect !== 200) {
-      expect(await apiDeselect(page, jwt, [medium4.inode])).toBe(200);
+      expect(await apiDeselect(page, jwt, [medium4.id])).toBe(200);
     }
 
     await waitFileStatus(page, jwt, "medium-3.dat", "synced", 30_000);
@@ -470,7 +470,7 @@ test.describe.serial("Concurrent Mixed Operations", () => {
 
     // Fire 10 concurrent calls — some may 500 due to SQLite contention
     const results = await page.evaluate(
-      async ({ jwt, inode }) => {
+      async ({ jwt, id }) => {
         const promises = Array(10)
           .fill(null)
           .map(() =>
@@ -480,12 +480,12 @@ test.describe.serial("Concurrent Mixed Operations", () => {
                 "Content-Type": "application/json",
                 "X-Auth": jwt,
               },
-              body: JSON.stringify({ inodes: [inode] }),
+              body: JSON.stringify({ ids: [id] }),
             }).then((r) => r.status)
           );
         return Promise.all(promises);
       },
-      { jwt, inode: medium5.inode }
+      { jwt, id: medium5.id }
     );
 
     // At least one must succeed; retry if needed
@@ -493,7 +493,7 @@ test.describe.serial("Concurrent Mixed Operations", () => {
     expect(okCount).toBeGreaterThan(0);
     if (okCount < 10) {
       // Ensure select is applied
-      expect(await apiSelect(page, jwt, [medium5.inode])).toBe(200);
+      expect(await apiSelect(page, jwt, [medium5.id])).toBe(200);
     }
 
     await waitFileStatus(page, jwt, "medium-5.dat", "synced", 30_000);
@@ -514,7 +514,7 @@ test.describe("Folder Operations", () => {
     expect(testDir).toBeTruthy();
     expect(testDir.type).toBe("dir");
 
-    expect(await apiSelect(page, jwt, [testDir.inode])).toBe(200);
+    expect(await apiSelect(page, jwt, [testDir.id])).toBe(200);
 
     // Wait for folder and children
     await waitFileStatus(page, jwt, "test-dir", "synced", 30_000);
@@ -522,7 +522,7 @@ test.describe("Folder Operations", () => {
 
     // Check children
     const children = await fetchEntries(page, jwt, {
-      parentIno: testDir.inode,
+      parentIno: testDir.id,
     });
     expect(children.items.length).toBe(10);
     for (const child of children.items) {

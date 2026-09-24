@@ -42,7 +42,7 @@ async function listRoot(page: Page, jwt: string) {
   return page.evaluate(async (jwt) => {
     const resp = await fetch("/api/sync/entries?path=", { headers: { "X-Auth": jwt } });
     const body = await resp.json();
-    return body.items as Array<{ inode: number; name: string; selected: boolean }>;
+    return body.items as Array<{ id: number; name: string; selected: boolean }>;
   }, jwt);
 }
 
@@ -53,8 +53,8 @@ test("the virtual root cannot be selected, and selects nothing", async ({ page }
   const before = await listRoot(page, jwt);
   const selectedBefore = before.filter((e) => e.selected).length;
 
-  const res = await post(page, jwt, "/api/sync/select", { inodes: [0] });
-  expect(res.status, `inode 0 must be rejected, got ${res.status}: ${res.text}`).toBe(400);
+  const res = await post(page, jwt, "/api/sync/select", { ids: [0] });
+  expect(res.status, `id 0 must be rejected, got ${res.status}: ${res.text}`).toBe(400);
 
   await page.waitForTimeout(3000);
 
@@ -68,14 +68,14 @@ test("the virtual root cannot be selected, and selects nothing", async ({ page }
 test("the virtual root cannot deselect either", async ({ page }) => {
   await page.goto("/");
   const jwt = await apiLogin(page);
-  const res = await post(page, jwt, "/api/sync/deselect", { inodes: [0] });
+  const res = await post(page, jwt, "/api/sync/deselect", { ids: [0] });
   expect(res.status).toBe(400);
 });
 
 test("malformed selection payloads are rejected, not silently accepted", async ({ page }) => {
   await page.goto("/");
   const jwt = await apiLogin(page);
-  for (const body of [{ inodes: ["abc"] }, { inodes: [{}] }]) {
+  for (const body of [{ ids: ["abc"] }, { ids: [{}] }]) {
     const res = await post(page, jwt, "/api/sync/select", body);
     expect(res.status, `payload ${JSON.stringify(body)} should be 400`).toBe(400);
   }
