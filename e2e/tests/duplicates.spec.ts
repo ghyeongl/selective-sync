@@ -101,16 +101,9 @@ test("reports identical sibling subtrees and skips byte-different ones", async (
   expect(group.names).not.toContain("different");
   expect(group.fileCount).toBe(2);
 
-  // E1: DupGroup.Inodes is real, on-disk directory inodes (DuplicateSiblings
-  // reads them straight off the entries table for real sibling directories),
-  // not the R63 catalog id, and this endpoint isn't one of the
-  // select/deselect/SSE/entry-lookup endpoints S5 migrates to id. Two real
-  // directories on one filesystem can't share an inode, so this uniqueness
-  // check is still a legitimate disk-hint comparison, unlike the
-  // catalog-identity comparisons elsewhere in this PR's specs. Left on
-  // inode deliberately.
-  //
-  // names[i] must identify inodes[i] — a caller trims by inode.
-  expect(group.inodes).toHaveLength(group.names.length);
-  expect(new Set(group.inodes).size).toBe(group.inodes.length);
+  // E1 follow-up: the report's consumer trims by identity, so DupGroup grows
+  // an Ids field (same order as Names) alongside the existing Inodes hint.
+  // names[i] must identify ids[i] — a caller trims by id.
+  expect(group.ids).toHaveLength(group.names.length);
+  expect(new Set(group.ids).size).toBe(group.ids.length);
 });
