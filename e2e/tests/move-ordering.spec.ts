@@ -53,7 +53,7 @@ async function listPath(page: Page, jwt: string, rel: string) {
       );
       if (!resp.ok) return null;
       const body = await resp.json();
-      return body.items as Array<{ inode: number; name: string; selected: boolean; status: string }>;
+      return body.items as Array<{ id: number; name: string; selected: boolean; status: string }>;
     },
     { jwt, rel }
   );
@@ -84,15 +84,15 @@ test("a source-first move relocates instead of duplicating", async ({ page }) =>
   const root = await listPath(page, jwt, "");
   const src = root!.find((i) => i.name === SRC)!;
   const resp = await page.evaluate(
-    async ({ jwt, inode }) => {
+    async ({ jwt, id }) => {
       const r = await fetch("/api/sync/select", {
         method: "POST",
         headers: { "X-Auth": jwt, "Content-Type": "application/json" },
-        body: JSON.stringify({ inodes: [inode] }),
+        body: JSON.stringify({ ids: [id] }),
       });
       return r.status;
     },
-    { jwt, inode: src.inode }
+    { jwt, id: src.id }
   );
   expect(resp).toBe(200);
   await expect
@@ -125,7 +125,7 @@ test("a source-first move relocates instead of duplicating", async ({ page }) =>
 
   // One row, still selected, and nothing left at the source.
   const moved = (await listPath(page, jwt, DST_DIR))!.find((i) => i.name === SRC)!;
-  expect(moved.inode).toBe(src.inode); // a move keeps the inode; a re-register would not
+  expect(moved.id).toBe(src.id); // a move keeps the row; a re-register would not
   expect(moved.selected).toBe(true);
   const rootAfter = await listPath(page, jwt, "");
   expect(rootAfter!.some((i) => i.name === SRC)).toBe(false);
@@ -189,15 +189,15 @@ test("moving a synced folder relocates the subtree and keeps selection", async (
   const leafBefore = (await listPath(page, jwt, F_SRC))!.find((i) => i.name === "leaf.txt")!;
 
   const status = await page.evaluate(
-    async ({ jwt, inode }) => {
+    async ({ jwt, id }) => {
       const r = await fetch("/api/sync/select", {
         method: "POST",
         headers: { "X-Auth": jwt, "Content-Type": "application/json" },
-        body: JSON.stringify({ inodes: [inode] }),
+        body: JSON.stringify({ ids: [id] }),
       });
       return r.status;
     },
-    { jwt, inode: folder.inode }
+    { jwt, id: folder.id }
   );
   expect(status).toBe(200);
   await expect
@@ -219,15 +219,15 @@ test("moving a synced folder relocates the subtree and keeps selection", async (
   expect(fs.existsSync(path.join(SPACES, F_SRC))).toBe(false);
 
   // The subtree followed, keeping its identity and its selection — a
-  // re-registration would leave a row here too, but with a new inode and
+  // re-registration would leave a row here too, but with a new id and
   // selected=false, which is exactly the failure.
   const movedDir = (await listPath(page, jwt, F_DST))!.find((i) => i.name === F_SRC)!;
-  expect(movedDir.inode).toBe(folder.inode);
+  expect(movedDir.id).toBe(folder.id);
 
   const movedLeaf = (await listPath(page, jwt, `${F_DST}/${F_SRC}`))!.find(
     (i) => i.name === "leaf.txt"
   )!;
-  expect(movedLeaf.inode).toBe(leafBefore.inode);
+  expect(movedLeaf.id).toBe(leafBefore.id);
   expect(movedLeaf.selected).toBe(true);
 
   await expect
