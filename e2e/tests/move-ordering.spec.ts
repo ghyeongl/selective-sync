@@ -94,7 +94,7 @@ test("a source-first move relocates instead of duplicating", async ({ page }) =>
     },
     { jwt, id: src.id }
   );
-  expect(resp).toBe(200);
+  expect(resp).toBe(202);
   await expect
     .poll(() => fs.existsSync(path.join(SPACES, SRC)), { timeout: 60_000 })
     .toBe(true);
@@ -199,7 +199,7 @@ test("moving a synced folder relocates the subtree and keeps selection", async (
     },
     { jwt, id: folder.id }
   );
-  expect(status).toBe(200);
+  expect(status).toBe(202);
   await expect
     .poll(() => fs.existsSync(path.join(SPACES, F_SRC, "leaf.txt")), { timeout: 90_000 })
     .toBe(true);

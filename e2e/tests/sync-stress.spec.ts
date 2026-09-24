@@ -159,7 +159,7 @@ test.describe.serial("Large File Operations", () => {
     const large = data.items.find((e: any) => e.name === "large-file.dat");
     expect(large).toBeTruthy();
 
-    expect(await apiSelect(page, jwt, [large.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [large.id])).toBe(202);
 
     await waitFileStatus(page, jwt, "large-file.dat", "synced", 60_000);
 
@@ -173,7 +173,7 @@ test.describe.serial("Large File Operations", () => {
     const data = await fetchEntries(page, jwt);
     const large = data.items.find((e: any) => e.name === "large-file.dat");
 
-    expect(await apiDeselect(page, jwt, [large.id])).toBe(200);
+    expect(await apiDeselect(page, jwt, [large.id])).toBe(202);
 
     await waitFileStatus(page, jwt, "large-file.dat", "archived", 60_000);
     expect(
@@ -212,7 +212,7 @@ test.describe.serial("Rapid Multi-Request: Burst Select", () => {
     expect(smallIds.length).toBe(20);
 
     // Single batch select with all 20 ids
-    expect(await apiSelect(page, jwt, smallIds)).toBe(200);
+    expect(await apiSelect(page, jwt, smallIds)).toBe(202);
 
     // Wait for all 20 to reach "synced"
     await pollUntil(
@@ -243,7 +243,7 @@ test.describe.serial("Rapid Multi-Request: Burst Select", () => {
       .map((e: any) => e.id);
 
     // Single batch deselect
-    expect(await apiDeselect(page, jwt, smallIds)).toBe(200);
+    expect(await apiDeselect(page, jwt, smallIds)).toBe(202);
 
     await pollUntil(
       page,
@@ -289,14 +289,14 @@ test.describe.serial("Rapid Multi-Request: Burst Select", () => {
       { jwt, ids: smallIds }
     );
 
-    const okCount = results.filter((s: number) => s === 200).length;
+    const okCount = results.filter((s: number) => s === 202).length;
     const failedIds = smallIds.filter(
-      (_: any, i: number) => results[i] !== 200
+      (_: any, i: number) => results[i] !== 202
     );
 
     // Retry failed ones sequentially
     for (const id of failedIds) {
-      expect(await apiSelect(page, jwt, [id])).toBe(200);
+      expect(await apiSelect(page, jwt, [id])).toBe(202);
     }
 
     // Eventually all should sync
@@ -344,7 +344,7 @@ test.describe.serial("Rapid Toggle Stress", () => {
               body: JSON.stringify({ ids: [id] }),
             });
             status = resp.status;
-            if (status === 200) break;
+            if (status === 202) break;
             await new Promise((r) => setTimeout(r, 50));
           }
           statuses.push(status);
@@ -354,7 +354,7 @@ test.describe.serial("Rapid Toggle Stress", () => {
       { jwt, id: medium.id }
     );
 
-    expect(results).toEqual(Array(20).fill(200));
+    expect(results).toEqual(Array(20).fill(202));
 
     await page.waitForTimeout(3000);
     await waitFileStatus(page, jwt, "medium-1.dat", "archived", 30_000);
@@ -385,7 +385,7 @@ test.describe.serial("Rapid Toggle Stress", () => {
               body: JSON.stringify({ ids: [id] }),
             });
             status = resp.status;
-            if (status === 200) break;
+            if (status === 202) break;
             await new Promise((r) => setTimeout(r, 50));
           }
           statuses.push(status);
@@ -395,7 +395,7 @@ test.describe.serial("Rapid Toggle Stress", () => {
       { jwt, id: medium.id }
     );
 
-    expect(results).toEqual(Array(21).fill(200));
+    expect(results).toEqual(Array(21).fill(202));
 
     await page.waitForTimeout(3000);
     await waitFileStatus(page, jwt, "medium-2.dat", "synced", 30_000);
@@ -417,7 +417,7 @@ test.describe.serial("Concurrent Mixed Operations", () => {
     expect(medium4).toBeTruthy();
 
     // Pre-select medium-4 so we can deselect it
-    expect(await apiSelect(page, jwt, [medium4.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [medium4.id])).toBe(202);
     await waitFileStatus(page, jwt, "medium-4.dat", "synced", 30_000);
 
     // Concurrently: select medium-3, deselect medium-4
@@ -442,11 +442,11 @@ test.describe.serial("Concurrent Mixed Operations", () => {
     );
 
     // Retry any that failed due to SQLite contention
-    if (results.select !== 200) {
-      expect(await apiSelect(page, jwt, [medium3.id])).toBe(200);
+    if (results.select !== 202) {
+      expect(await apiSelect(page, jwt, [medium3.id])).toBe(202);
     }
-    if (results.deselect !== 200) {
-      expect(await apiDeselect(page, jwt, [medium4.id])).toBe(200);
+    if (results.deselect !== 202) {
+      expect(await apiDeselect(page, jwt, [medium4.id])).toBe(202);
     }
 
     await waitFileStatus(page, jwt, "medium-3.dat", "synced", 30_000);
@@ -489,11 +489,11 @@ test.describe.serial("Concurrent Mixed Operations", () => {
     );
 
     // At least one must succeed; retry if needed
-    const okCount = results.filter((s: number) => s === 200).length;
+    const okCount = results.filter((s: number) => s === 202).length;
     expect(okCount).toBeGreaterThan(0);
     if (okCount < 10) {
       // Ensure select is applied
-      expect(await apiSelect(page, jwt, [medium5.id])).toBe(200);
+      expect(await apiSelect(page, jwt, [medium5.id])).toBe(202);
     }
 
     await waitFileStatus(page, jwt, "medium-5.dat", "synced", 30_000);
@@ -514,7 +514,7 @@ test.describe("Folder Operations", () => {
     expect(testDir).toBeTruthy();
     expect(testDir.type).toBe("dir");
 
-    expect(await apiSelect(page, jwt, [testDir.id])).toBe(200);
+    expect(await apiSelect(page, jwt, [testDir.id])).toBe(202);
 
     // Wait for folder and children
     await waitFileStatus(page, jwt, "test-dir", "synced", 30_000);
